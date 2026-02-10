@@ -6,14 +6,13 @@ export default function Login() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-ink-100 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-5 py-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-100 text-brand-600">
-            <span className="text-lg font-bold">E</span>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.4em] text-ink-500">ELLA</p>
-            <p className="font-display text-lg">Parent Portal</p>
-          </div>
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-4 px-5 py-4">
+          <img
+            src="/assets/ella_logo.png"
+            alt="ELLA logo"
+            className="h-20 w-20 rounded-2xl object-contain"
+          />
+          <p className="text-lg uppercase tracking-[0.4em] text-ink-500">ELLA</p>
         </div>
       </header>
 

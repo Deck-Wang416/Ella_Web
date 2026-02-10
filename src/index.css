@@ -33,3 +33,22 @@ body {
 .btn-ghost {
   @apply inline-flex items-center justify-center rounded-2xl border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-brand-200 hover:text-brand-600;
 }
+
+@keyframes avatar-wiggle {
+  0% {
+    transform: rotate(0deg);
+  }
+  35% {
+    transform: rotate(12deg);
+  }
+  70% {
+    transform: rotate(-8deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.avatar-wiggle {
+  animation: avatar-wiggle 420ms ease-in-out;
+}
