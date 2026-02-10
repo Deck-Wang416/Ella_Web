@@ -64,15 +64,14 @@ export default function Calendar({ availableDates, selectedDate, onSelect }) {
             <button
               key={key}
               type="button"
-              onClick={() => isAvailable && onSelect(key)}
+              onClick={() => onSelect(key)}
               className={`h-9 w-9 rounded-full text-sm font-semibold transition ${
                 isSelected
                   ? "bg-brand-500 text-white"
                   : isAvailable
                   ? "text-ink-900 hover:bg-ink-100"
-                  : "text-ink-300"
+                  : "text-ink-300 hover:text-ink-500"
               }`}
-              disabled={!isAvailable}
             >
               {date.getDate()}
             </button>
@@ -80,7 +79,7 @@ export default function Calendar({ availableDates, selectedDate, onSelect }) {
         })}
       </div>
       <p className="mt-4 text-xs text-ink-500">
-        Dates in black have stories recorded. Grey dates are unavailable.
+        Dates in black have stories recorded. Grey dates are still selectable for diary entries.
       </p>
     </div>
   );

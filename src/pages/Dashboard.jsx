@@ -1,9 +1,9 @@
-import { useState } from "react";
 import records from "../data/records.json";
 import Calendar from "../components/Calendar.jsx";
+import { useSelectedDate } from "../context/DateContext.jsx";
 
 export default function Dashboard() {
-  const [selectedDate, setSelectedDate] = useState(records.selectedDate);
+  const { selectedDate, setSelectedDate } = useSelectedDate();
 
   const displayDate = selectedDate
     ? new Date(selectedDate).toLocaleDateString("en-US", {
