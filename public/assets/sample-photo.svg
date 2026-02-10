@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e0f2ff" />
+      <stop offset="100%" stop-color="#f8fafc" />
+    </linearGradient>
+  </defs>
+  <rect width="720" height="480" fill="url(#bg)" />
+  <circle cx="180" cy="220" r="90" fill="#93c5fd" />
+  <circle cx="540" cy="220" r="120" fill="#c7d2fe" />
+  <rect x="220" y="300" width="280" height="90" rx="30" fill="#60a5fa" />
+  <text x="360" y="350" font-family="Nunito Sans, sans-serif" font-size="28" text-anchor="middle" fill="#0f172a">Story Moment</text>
+</svg>

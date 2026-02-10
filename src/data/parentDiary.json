@@ -1,0 +1,22 @@
+{
+  "submittedDates": ["2026-02-05"],
+  "questions": [
+    {
+      "id": "who_prompted",
+      "type": "select",
+      "label": "Who prompted the story today?",
+      "options": ["Parent", "Sibling", "Child", "Other"]
+    },
+    {
+      "id": "response",
+      "type": "select",
+      "label": "How did your child respond?",
+      "options": ["Engaged", "Neutral", "Resistant", "Not sure"]
+    },
+    {
+      "id": "open_question",
+      "type": "text",
+      "label": "Open response"
+    }
+  ]
+}

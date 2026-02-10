@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-white text-ink-900;
+}
+
+.app-shell {
+  @apply min-h-screen bg-gradient-to-br from-white via-white to-ink-100;
+}
+
+.card {
+  @apply bg-white rounded-3xl shadow-card border border-ink-100;
+}
+
+.section-title {
+  @apply text-xs uppercase tracking-[0.2em] text-ink-500 font-semibold;
+}
+
+.input {
+  @apply w-full rounded-2xl border border-ink-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-200/60 transition hover:bg-brand-600;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-2xl border border-ink-200 px-4 py-2 text-sm font-semibold text-ink-700 transition hover:border-brand-200 hover:text-brand-600;
+}

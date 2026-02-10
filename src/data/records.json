@@ -1,0 +1,12 @@
+{
+  "availableDates": ["2026-02-04", "2026-02-05", "2026-02-07", "2026-02-09"],
+  "selectedDate": "2026-02-09",
+  "photo": "/assets/sample-photo.svg",
+  "words": ["avocado", "green", "story", "sharing"],
+  "highlight": "Ella used the avocado story to help connect colors with feelings.",
+  "ask": [
+    "Can you tell me what an avocado looks like?",
+    "What did the character do when they felt stuck?",
+    "Which part of the story did you like most?"
+  ]
+}
