@@ -48,7 +48,11 @@ export default function ProfileModal({ open, onClose }) {
                   {theme}
                   <button
                     type="button"
-                    onClick={() => setThemes((prev) => prev.filter((item) => item !== theme))}
+                    onClick={() => {
+                      const confirmed = window.confirm(`Remove theme "${theme}"?`);
+                      if (!confirmed) return;
+                      setThemes((prev) => prev.filter((item) => item !== theme));
+                    }}
                     className="text-ink-500 hover:text-brand-600"
                     aria-label={`Remove ${theme}`}
                   >
@@ -77,9 +81,6 @@ export default function ProfileModal({ open, onClose }) {
                 +
               </button>
             </div>
-            <p className="mt-2 text-xs text-ink-500">
-              Changes are local-only for now. We can wire this to JSON or backend later.
-            </p>
           </div>
         </div>
       </div>

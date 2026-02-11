@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import records from "../data/records.json";
 import DatePicker from "../components/DatePicker.jsx";
 
@@ -32,6 +32,16 @@ export default function Dashboard() {
   }, []);
 
   const [selectedDate, setSelectedDate] = useState(() => nearestDate);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const photos = records.photos || [];
+
+  useEffect(() => {
+    if (photos.length <= 1) return;
+    const timer = setInterval(() => {
+      setPhotoIndex((prev) => (prev + 1) % photos.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [photos.length]);
 
   return (
     <div className="grid gap-6">
@@ -47,13 +57,41 @@ export default function Dashboard() {
       <section className="card p-5">
         <div className="flex items-center justify-between">
           <p className="section-title">Photo</p>
-          <span className="text-xs text-ink-500">Hardcoded for now</span>
+          {photos.length > 0 && (
+            <span className="text-xs text-ink-500">
+              {photoIndex + 1}/{photos.length}
+            </span>
+          )}
         </div>
-        <img
-          src={records.photo}
-          alt="Child and ELLA"
-          className="mt-4 h-48 w-full rounded-2xl object-cover"
-        />
+        <div className="relative mt-4">
+          <img
+            src={photos[photoIndex]}
+            alt="Child and ELLA"
+            className="h-48 w-full rounded-2xl object-cover"
+          />
+          {photos.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  setPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
+                }
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
+                aria-label="Previous photo"
+              >
+                &lt;
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhotoIndex((prev) => (prev + 1) % photos.length)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
+                aria-label="Next photo"
+              >
+                &gt;
+              </button>
+            </>
+          )}
+        </div>
       </section>
 
       <section className="card p-5">
@@ -69,7 +107,13 @@ export default function Dashboard() {
 
       <section className="card p-5">
         <p className="section-title">Highlight</p>
-        <p className="mt-3 text-sm text-ink-700">{records.highlight}</p>
+        <div className="mt-4 grid gap-3">
+          {records.highlight.map((item) => (
+            <div key={item} className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
+              {item}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="card p-5">

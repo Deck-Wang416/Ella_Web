@@ -113,9 +113,15 @@ export default function Calendar({
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-ink-500">
-        Dates in black have stories recorded. Grey dates are still selectable for diary entries.
-      </p>
+      {useAvailabilityStyles ? (
+        <p className="mt-4 text-xs text-ink-500">
+          Dates in black have stories recorded. Grey dates have no records and cannot be selected.
+        </p>
+      ) : (
+        <p className="mt-4 text-xs text-ink-500">
+          All dates are selectable. Dates with a blue dot have submitted questionnaires.
+        </p>
+      )}
     </div>
   );
 }

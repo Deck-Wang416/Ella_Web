@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   return (
     <div className="min-h-screen">
@@ -17,18 +21,35 @@ export default function Login() {
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-col gap-6 px-5 py-12">
-        <div>
+        <div className="text-center">
           <h1 className="font-display text-3xl">Welcome back</h1>
           <p className="mt-2 text-sm text-ink-500">Please log in with the account provided by your team.</p>
         </div>
         <div className="card p-6">
           <label className="text-sm font-semibold text-ink-700">Username</label>
-          <input className="input mt-2" placeholder="Enter username" />
+          <input
+            className="input mt-2"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
           <label className="mt-4 text-sm font-semibold text-ink-700">Password</label>
-          <input className="input mt-2" type="password" placeholder="Enter password" />
+          <input
+            className="input mt-2"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
           <button
             type="button"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => {
+              if (username === "Deck" && password === "123456") {
+                setError("");
+                navigate("/dashboard");
+                return;
+              }
+              setError("Invalid username or password.");
+            }}
             className="btn-primary mt-6 w-full"
           >
             Log in

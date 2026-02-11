@@ -11,10 +11,24 @@ export default function ParentDiary() {
     const day = String(today.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   });
-  const hasSubmitted = diary.submittedDates.includes(diaryDate);
+  const [formValues, setFormValues] = useState({});
+  const [submittedDates, setSubmittedDates] = useState(() => diary.submittedDates);
+  const [showToast, setShowToast] = useState(false);
+  const hasSubmitted = submittedDates.includes(diaryDate);
+  const canSubmit = Object.values(formValues).some((value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return String(value || "").trim().length > 0;
+  });
 
   return (
-    <div className="grid gap-6">
+    <div className="relative grid gap-6">
+      {showToast && (
+        <div className="fixed right-5 top-5 z-50 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+          Submitted successfully!
+        </div>
+      )}
       <section>
         <DatePicker
           label="Date"
@@ -22,7 +36,7 @@ export default function ParentDiary() {
           onChange={setDiaryDate}
           availableDates={records.availableDates}
           allowAll
-          markedDates={diary.submittedDates}
+          markedDates={submittedDates}
           useAvailabilityStyles={false}
         />
       </section>
@@ -54,12 +68,33 @@ export default function ParentDiary() {
                   1;
 
                 return (
-                  <QuestionBlock key={question.id} question={question} number={number} />
+                  <QuestionBlock
+                    key={question.id}
+                    question={question}
+                    number={number}
+                    value={formValues[question.id]}
+                    onChange={(nextValue) =>
+                      setFormValues((prev) => ({ ...prev, [question.id]: nextValue }))
+                    }
+                  />
                 );
               })
             )}
           </div>
-          <button type="button" className="btn-primary mt-8 w-full">
+          <button
+            type="button"
+            className={`btn-primary mt-8 w-full ${!canSubmit ? "opacity-50" : ""}`}
+            disabled={!canSubmit}
+            onClick={() => {
+              if (!canSubmit) return;
+              setSubmittedDates((prev) =>
+                prev.includes(diaryDate) ? prev : [...prev, diaryDate]
+              );
+              setFormValues({});
+              setShowToast(true);
+              setTimeout(() => setShowToast(false), 3000);
+            }}
+          >
             Submit
           </button>
         </form>
@@ -68,7 +103,16 @@ export default function ParentDiary() {
   );
 }
 
-function QuestionBlock({ question, number }) {
+function QuestionBlock({ question, number, value, onChange }) {
+  const toggleCheckbox = (option) => {
+    const current = Array.isArray(value) ? value : [];
+    if (current.includes(option)) {
+      onChange(current.filter((item) => item !== option));
+    } else {
+      onChange([...current, option]);
+    }
+  };
+
   return (
     <div className="grid gap-3">
       <label className="text-sm font-semibold text-ink-700">
@@ -80,7 +124,12 @@ function QuestionBlock({ question, number }) {
             if (typeof option === "string") {
               return (
                 <label key={option} className="flex items-center gap-2 text-sm text-ink-700">
-                  <input type="checkbox" className="h-4 w-4 rounded border-ink-300" />
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-ink-300"
+                    checked={Array.isArray(value) ? value.includes(option) : false}
+                    onChange={() => toggleCheckbox(option)}
+                  />
                   {option}
                 </label>
               );
@@ -89,7 +138,14 @@ function QuestionBlock({ question, number }) {
             return (
               <div key={option.label} className="grid gap-2">
                 <label className="flex items-center gap-2 text-sm text-ink-700">
-                  <input type="checkbox" className="h-4 w-4 rounded border-ink-300" />
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-ink-300"
+                    checked={
+                      Array.isArray(value) ? value.includes(option.label) : false
+                    }
+                    onChange={() => toggleCheckbox(option.label)}
+                  />
                   {option.label}
                 </label>
                 <input className="input" placeholder="Please specify" />
@@ -102,19 +158,37 @@ function QuestionBlock({ question, number }) {
         <div className="grid gap-2">
           {question.options.map((option) => (
             <label key={option} className="flex items-center gap-2 text-sm text-ink-700">
-              <input type="radio" name={question.id} className="h-4 w-4 border-ink-300" />
+              <input
+                type="radio"
+                name={question.id}
+                className="h-4 w-4 border-ink-300"
+                checked={value === option}
+                onChange={() => onChange(option)}
+              />
               {option}
             </label>
           ))}
         </div>
       )}
       {question.type === "textarea" && (
-        <textarea className="input min-h-[140px]" placeholder="Write here" />
+        <textarea
+          className="input min-h-[140px]"
+          placeholder="Write here"
+          value={value || ""}
+          onChange={(event) => onChange(event.target.value)}
+        />
       )}
       {question.followup && (
         <div className="grid gap-2">
           <p className="text-xs text-ink-500">{question.followup}</p>
-          <textarea className="input min-h-[120px]" placeholder="Write here" />
+          <textarea
+            className="input min-h-[120px]"
+            placeholder="Write here"
+            value={value?.followup || ""}
+            onChange={(event) =>
+              onChange({ ...(value || {}), followup: event.target.value })
+            }
+          />
         </div>
       )}
     </div>
