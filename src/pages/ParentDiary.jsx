@@ -1,25 +1,34 @@
+import { useState } from "react";
 import records from "../data/records.json";
 import diary from "../data/parentDiary.json";
-import { useSelectedDate } from "../context/DateContext.jsx";
+import DatePicker from "../components/DatePicker.jsx";
 
 export default function ParentDiary() {
-  const { selectedDate } = useSelectedDate();
-  const hasSubmitted = diary.submittedDates.includes(selectedDate);
-  const displayDate = new Date(selectedDate).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric"
+  const [diaryDate, setDiaryDate] = useState(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   });
+  const hasSubmitted = diary.submittedDates.includes(diaryDate);
 
   return (
     <div className="grid gap-6">
       <section>
-        <p className="section-title">Storytelling Robot Diary</p>
-        <p className="mt-2 text-2xl font-display">{displayDate}</p>
+        <DatePicker
+          label="Date"
+          selectedDate={diaryDate}
+          onChange={setDiaryDate}
+          availableDates={records.availableDates}
+          allowAll
+          markedDates={diary.submittedDates}
+          useAvailabilityStyles={false}
+        />
       </section>
 
       <section className="card p-6">
-        <p className="text-sm font-semibold text-ink-700">Caregiver instructions</p>
+        <p className="text-sm font-semibold text-ink-700">Caregiver Instruction</p>
         <ul className="mt-3 grid gap-2 text-sm text-ink-600">
           {diary.instructions.map((item) => (
             <li key={item}>• {item}</li>

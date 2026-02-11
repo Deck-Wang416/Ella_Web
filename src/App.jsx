@@ -3,34 +3,31 @@ import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import ParentDiary from "./pages/ParentDiary.jsx";
 import AppLayout from "./components/AppLayout.jsx";
-import { DateProvider } from "./context/DateContext.jsx";
 
 export default function App() {
   return (
     <div className="app-shell">
-      <DateProvider>
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/dashboard"
-            element={
-              <AppLayout active="dashboard">
-                <Dashboard />
-              </AppLayout>
-            }
-          />
-          <Route
-            path="/parent-diary"
-            element={
-              <AppLayout active="parent-diary">
-                <ParentDiary />
-              </AppLayout>
-            }
-          />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </DateProvider>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/dashboard"
+          element={
+            <AppLayout active="dashboard">
+              <Dashboard />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="/parent-diary"
+          element={
+            <AppLayout active="parent-diary">
+              <ParentDiary />
+            </AppLayout>
+          }
+        />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     </div>
   );
 }

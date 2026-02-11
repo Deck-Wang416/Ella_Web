@@ -1,30 +1,47 @@
+import { useMemo, useState } from "react";
 import records from "../data/records.json";
-import Calendar from "../components/Calendar.jsx";
-import { useSelectedDate } from "../context/DateContext.jsx";
+import DatePicker from "../components/DatePicker.jsx";
 
 export default function Dashboard() {
-  const { selectedDate, setSelectedDate } = useSelectedDate();
+  const nearestDate = useMemo(() => {
+    if (!records.availableDates.length) return null;
+    const today = new Date();
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const displayDate = selectedDate
-    ? new Date(selectedDate).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric"
-      })
-    : "Select a date";
+    const toLocalDate = (dateStr) => {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    };
+
+    let best = records.availableDates[0];
+    let bestDiff = Math.abs(
+      toLocalDate(best).getTime() - todayMidnight.getTime()
+    );
+
+    records.availableDates.forEach((dateStr) => {
+      const diff = Math.abs(
+        toLocalDate(dateStr).getTime() - todayMidnight.getTime()
+      );
+      if (diff < bestDiff) {
+        best = dateStr;
+        bestDiff = diff;
+      }
+    });
+
+    return best;
+  }, []);
+
+  const [selectedDate, setSelectedDate] = useState(() => nearestDate);
 
   return (
     <div className="grid gap-6">
       <section>
-        <p className="section-title">Date</p>
-        <p className="mt-2 text-2xl font-display">{displayDate}</p>
-        <div className="mt-4">
-          <Calendar
-            availableDates={records.availableDates}
-            selectedDate={selectedDate}
-            onSelect={setSelectedDate}
-          />
-        </div>
+        <DatePicker
+          label="Date"
+          selectedDate={selectedDate}
+          onChange={setSelectedDate}
+          availableDates={records.availableDates}
+        />
       </section>
 
       <section className="card p-5">

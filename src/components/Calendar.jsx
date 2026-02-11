@@ -1,13 +1,40 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-export default function Calendar({ availableDates, selectedDate, onSelect }) {
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export default function Calendar({
+  availableDates,
+  selectedDate,
+  onSelect,
+  allowAll = false,
+  markedDates = [],
+  useAvailabilityStyles = true
+}) {
   const availableSet = useMemo(() => new Set(availableDates), [availableDates]);
+  const markedSet = useMemo(() => new Set(markedDates), [markedDates]);
   const [monthCursor, setMonthCursor] = useState(() => {
-    const base = selectedDate ? new Date(selectedDate) : new Date();
+    const base = parseLocalDate(selectedDate) || new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
+
+  useEffect(() => {
+    const base = parseLocalDate(selectedDate);
+    if (!base) return;
+    setMonthCursor(new Date(base.getFullYear(), base.getMonth(), 1));
+  }, [selectedDate]);
 
   const year = monthCursor.getFullYear();
   const month = monthCursor.getMonth();
@@ -56,24 +83,32 @@ export default function Calendar({ availableDates, selectedDate, onSelect }) {
         {days.map((date, index) => {
           if (!date) return <span key={`empty-${index}`} />;
 
-          const key = date.toISOString().slice(0, 10);
+          const key = formatLocalDate(date);
           const isAvailable = availableSet.has(key);
           const isSelected = selectedDate === key;
+          const isSelectable = allowAll || isAvailable;
+          const isMarked = markedSet.has(key);
+
+          const baseClass = useAvailabilityStyles
+            ? isAvailable
+              ? "text-ink-900 hover:bg-ink-100"
+              : "text-ink-300 hover:text-ink-500"
+            : "text-ink-700 hover:bg-ink-100";
 
           return (
             <button
               key={key}
               type="button"
-              onClick={() => onSelect(key)}
-              className={`h-9 w-9 rounded-full text-sm font-semibold transition ${
-                isSelected
-                  ? "bg-brand-500 text-white"
-                  : isAvailable
-                  ? "text-ink-900 hover:bg-ink-100"
-                  : "text-ink-300 hover:text-ink-500"
-              }`}
+              onClick={() => isSelectable && onSelect(key)}
+              className={`relative h-9 w-9 rounded-full text-sm font-semibold transition ${
+                isSelected ? "bg-brand-500 text-white" : baseClass
+              } ${isSelectable ? "" : "cursor-not-allowed"}`}
+              disabled={!isSelectable}
             >
               {date.getDate()}
+              {isMarked && (
+                <span className="absolute -bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-brand-500" />
+              )}
             </button>
           );
         })}
