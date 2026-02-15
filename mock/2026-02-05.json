@@ -2,16 +2,24 @@
   "date": "2026-02-05",
   "dashboard": {
     "hasInteraction": true,
-    "photos": ["/assets/sample-photo.svg", "/assets/sample-photo-2.svg"],
-    "words": ["avocado", "green", "story", "sharing"],
+    "photos": [
+      "/assets/sample-photo.svg",
+      "/assets/sample-photo-2.svg"
+    ],
+    "words": [
+      "avocado",
+      "green",
+      "sharing",
+      "market"
+    ],
     "highlight": [
-      "Ella used the avocado story to connect food with color words.",
-      "The child repeated a new word during dinner conversation."
+      "Ella connected the avocado story with color words and daily routines.",
+      "The child asked one follow-up question without prompting."
     ],
     "ask": [
-      "What is an avocado?",
-      "Can you describe the character in the story?",
-      "Which part of the story did you like most?"
+      "What does an avocado look like inside?",
+      "Can you tell me why the character shared food?",
+      "Which new word do you remember from this story?"
     ]
   },
   "diary": {
@@ -42,7 +50,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -63,7 +73,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -84,7 +96,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -117,7 +131,10 @@
         "id": "read_book",
         "type": "radio",
         "label": "Did you read a book or tell your child a story today?",
-        "options": ["Yes", "No"],
+        "options": [
+          "Yes",
+          "No"
+        ],
         "followup": {
           "label": "If not, please share if there was a particular reason:",
           "showWhen": {
@@ -165,7 +182,10 @@
           "label": "If yes, briefly describe how your child used the target word:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Yes, correctly", "Yes, incorrectly"]
+            "value": [
+              "Yes, correctly",
+              "Yes, incorrectly"
+            ]
           }
         }
       },
@@ -185,7 +205,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -196,18 +218,30 @@
       }
     ],
     "responses": {
-      "prompted": ["Parent prompted"],
-      "present": ["Parent(s)", "Sibling(s)"],
-      "feelings": ["Excited"],
-      "story_ideas": ["Asked related questions"],
-      "story_ideas_followup": "Asked where avocados grow.",
+      "prompted": [
+        "Parent prompted",
+        "Scheduled routine"
+      ],
+      "present": [
+        "Parent(s)",
+        "Sibling(s)"
+      ],
+      "feelings": [
+        "Excited"
+      ],
+      "story_ideas": [
+        "Asked related questions"
+      ],
+      "story_ideas_followup": "Asked why avocado turns brown after cutting.",
       "read_book": "Yes",
-      "talked_about_ella": ["Shared story with caregiver"],
-      "talked_about_ella_followup": "Retold the ending scene.",
+      "talked_about_ella": [
+        "Shared story with caregiver"
+      ],
+      "talked_about_ella_followup": "Retold the grocery scene with gestures.",
       "target_words": "Yes, correctly",
-      "target_words_followup": "Used avocado during snack time.",
+      "target_words_followup": "Used the word avocado during dinner.",
       "no_engagement": [],
-      "notes": "Good eye contact compared with yesterday."
+      "notes": "Strong engagement and good turn-taking."
     }
   }
 }

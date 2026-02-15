@@ -1,39 +1,72 @@
 import { useEffect, useMemo, useState } from "react";
-import records from "../data/records.json";
 import DatePicker from "../components/DatePicker.jsx";
+import {
+  formatTodayDate,
+  getDailyByDate,
+  listDailySummaries,
+  nearestDate,
+} from "../lib/dailyApi.js";
 
 export default function Dashboard() {
-  const nearestDate = useMemo(() => {
-    if (!records.availableDates.length) return null;
-    const today = new Date();
-    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const [summaries, setSummaries] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [dailyData, setDailyData] = useState(null);
+  const [photoIndex, setPhotoIndex] = useState(0);
 
-    const toLocalDate = (dateStr) => {
-      const [year, month, day] = dateStr.split("-").map(Number);
-      return new Date(year, month - 1, day);
-    };
+  const availableDates = useMemo(
+    () => summaries.filter((item) => item.hasInteraction).map((item) => item.date),
+    [summaries]
+  );
 
-    let best = records.availableDates[0];
-    let bestDiff = Math.abs(
-      toLocalDate(best).getTime() - todayMidnight.getTime()
-    );
+  useEffect(() => {
+    let cancelled = false;
 
-    records.availableDates.forEach((dateStr) => {
-      const diff = Math.abs(
-        toLocalDate(dateStr).getTime() - todayMidnight.getTime()
-      );
-      if (diff < bestDiff) {
-        best = dateStr;
-        bestDiff = diff;
-      }
+    async function init() {
+      const list = await listDailySummaries();
+      if (cancelled) return;
+      setSummaries(list);
+
+      const today = formatTodayDate();
+      const initial = nearestDate(today, availableDatesFromList(list));
+      setSelectedDate(initial);
+    }
+
+    init().catch((error) => {
+      console.error(error);
     });
 
-    return best;
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const [selectedDate, setSelectedDate] = useState(() => nearestDate);
-  const [photoIndex, setPhotoIndex] = useState(0);
-  const photos = records.photos || [];
+  useEffect(() => {
+    if (!selectedDate) {
+      setDailyData(null);
+      return;
+    }
+
+    let cancelled = false;
+    async function load() {
+      const json = await getDailyByDate(selectedDate);
+      if (cancelled) return;
+      setDailyData(json);
+      setPhotoIndex(0);
+    }
+
+    load().catch((error) => {
+      console.error(error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
+  const photos = dailyData?.dashboard?.photos || [];
+  const words = dailyData?.dashboard?.words || [];
+  const highlight = dailyData?.dashboard?.highlight || [];
+  const ask = dailyData?.dashboard?.ask || [];
 
   useEffect(() => {
     if (photos.length <= 1) return;
@@ -50,7 +83,7 @@ export default function Dashboard() {
           label="Date"
           selectedDate={selectedDate}
           onChange={setSelectedDate}
-          availableDates={records.availableDates}
+          availableDates={availableDates}
         />
       </section>
 
@@ -64,11 +97,17 @@ export default function Dashboard() {
           )}
         </div>
         <div className="relative mt-4">
-          <img
-            src={photos[photoIndex]}
-            alt="Child and ELLA"
-            className="h-48 w-full rounded-2xl object-cover"
-          />
+          {photos.length > 0 ? (
+            <img
+              src={photos[photoIndex]}
+              alt="Child and ELLA"
+              className="h-48 w-full rounded-2xl object-cover"
+            />
+          ) : (
+            <div className="flex h-48 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
+              No photo for this date.
+            </div>
+          )}
           {photos.length > 1 && (
             <>
               <button
@@ -97,35 +136,57 @@ export default function Dashboard() {
       <section className="card p-5">
         <p className="section-title">Words from today</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {records.words.map((word) => (
-            <span key={word} className="rounded-full bg-ink-100 px-3 py-1 text-sm">
-              {word}
-            </span>
-          ))}
+          {words.length > 0 ? (
+            words.map((word) => (
+              <span key={word} className="rounded-full bg-ink-100 px-3 py-1 text-sm">
+                {word}
+              </span>
+            ))
+          ) : (
+            <p className="text-sm text-ink-500">No words recorded for this date.</p>
+          )}
         </div>
       </section>
 
       <section className="card p-5">
         <p className="section-title">Highlight</p>
         <div className="mt-4 grid gap-3">
-          {records.highlight.map((item) => (
-            <div key={item} className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
-              {item}
-            </div>
-          ))}
+          {highlight.length > 0 ? (
+            highlight.map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
+              >
+                {item}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-ink-500">No highlights for this date.</p>
+          )}
         </div>
       </section>
 
       <section className="card p-5">
         <p className="section-title">Ask</p>
         <div className="mt-4 grid gap-3">
-          {records.ask.map((item) => (
-            <div key={item} className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
-              {item}
-            </div>
-          ))}
+          {ask.length > 0 ? (
+            ask.map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
+              >
+                {item}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-ink-500">No suggested questions for this date.</p>
+          )}
         </div>
       </section>
     </div>
   );
+}
+
+function availableDatesFromList(list) {
+  return list.filter((item) => item.hasInteraction).map((item) => item.date);
 }

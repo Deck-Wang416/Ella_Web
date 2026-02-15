@@ -2,16 +2,24 @@
   "date": "2026-02-06",
   "dashboard": {
     "hasInteraction": true,
-    "photos": ["/assets/sample-photo.svg", "/assets/sample-photo-2.svg"],
-    "words": ["avocado", "green", "story", "sharing"],
+    "photos": [
+      "/assets/sample-photo-2.svg",
+      "/assets/sample-photo.svg"
+    ],
+    "words": [
+      "garden",
+      "water",
+      "help",
+      "teamwork"
+    ],
     "highlight": [
-      "Ella used the avocado story to connect food with color words.",
-      "The child repeated a new word during dinner conversation."
+      "The session focused on helping behaviors and turn-taking.",
+      "Attention span was longer than yesterday during the middle of the story."
     ],
     "ask": [
-      "What is an avocado?",
-      "Can you describe the character in the story?",
-      "Which part of the story did you like most?"
+      "Who helped first in the story and why?",
+      "What happened after the plants got water?",
+      "How can we practice teamwork at home tonight?"
     ]
   },
   "diary": {
@@ -42,7 +50,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -63,7 +73,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -84,7 +96,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -117,7 +131,10 @@
         "id": "read_book",
         "type": "radio",
         "label": "Did you read a book or tell your child a story today?",
-        "options": ["Yes", "No"],
+        "options": [
+          "Yes",
+          "No"
+        ],
         "followup": {
           "label": "If not, please share if there was a particular reason:",
           "showWhen": {
@@ -165,7 +182,10 @@
           "label": "If yes, briefly describe how your child used the target word:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Yes, correctly", "Yes, incorrectly"]
+            "value": [
+              "Yes, correctly",
+              "Yes, incorrectly"
+            ]
           }
         }
       },
@@ -185,7 +205,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },

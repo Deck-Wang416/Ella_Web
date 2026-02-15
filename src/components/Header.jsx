@@ -64,6 +64,12 @@ export default function Header({ active, onOpenProfile }) {
               <button
                 type="button"
                 onClick={() => {
+                  if (window.__ellaDiaryDirty) {
+                    const confirmed = window.confirm(
+                      "You have unsaved changes. If you leave now, new changes will be lost."
+                    );
+                    if (!confirmed) return;
+                  }
                   setMenuOpen(false);
                   navigate("/login");
                 }}

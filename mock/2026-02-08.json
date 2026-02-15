@@ -8,9 +8,9 @@
     "ask": []
   },
   "diary": {
-    "submitted": false,
-    "submittedAt": null,
-    "updatedAt": null,
+    "submitted": true,
+    "submittedAt": "2026-02-08T21:10:00Z",
+    "updatedAt": "2026-02-08T21:24:00Z",
     "instructions": [
       "Please complete this diary once per day, preferably at the end of the day.",
       "There are no right or wrong answers — we are interested in your observations.",
@@ -35,7 +35,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -56,7 +58,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -77,7 +81,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -110,7 +116,10 @@
         "id": "read_book",
         "type": "radio",
         "label": "Did you read a book or tell your child a story today?",
-        "options": ["Yes", "No"],
+        "options": [
+          "Yes",
+          "No"
+        ],
         "followup": {
           "label": "If not, please share if there was a particular reason:",
           "showWhen": {
@@ -158,7 +167,10 @@
           "label": "If yes, briefly describe how your child used the target word:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Yes, correctly", "Yes, incorrectly"]
+            "value": [
+              "Yes, correctly",
+              "Yes, incorrectly"
+            ]
           }
         }
       },
@@ -178,7 +190,9 @@
           "label": "If Other, please specify:",
           "showWhen": {
             "operator": "includesAny",
-            "value": ["Other"]
+            "value": [
+              "Other"
+            ]
           }
         }
       },
@@ -188,6 +202,30 @@
         "label": "Any other observations, feedback, or notes from today."
       }
     ],
-    "responses": {}
+    "responses": {
+      "prompted": [
+        "My child did not engage in a session today"
+      ],
+      "present": [
+        "Parent(s)"
+      ],
+      "feelings": [
+        "Unsure"
+      ],
+      "story_ideas": [
+        "No, my child did not use story ideas outside the session today"
+      ],
+      "read_book": "No",
+      "read_book_followup": "Child was tired after a long day.",
+      "talked_about_ella": [
+        "No, my child did not mention Ella today"
+      ],
+      "target_words": "No, my child did not use the target words today",
+      "no_engagement": [
+        "Child was tired or upset",
+        "Time constraints"
+      ],
+      "notes": "No robot interaction today, but we still completed the diary entry."
+    }
   }
 }
