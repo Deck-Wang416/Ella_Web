@@ -8,7 +8,9 @@ export default function DatePicker({
   availableDates,
   allowAll = false,
   markedDates = [],
-  useAvailabilityStyles = true
+  useAvailabilityStyles = true,
+  helperText,
+  showHelperText = true,
 }) {
   const [open, setOpen] = useState(false);
 
@@ -43,6 +45,8 @@ export default function DatePicker({
             allowAll={allowAll}
             markedDates={markedDates}
             useAvailabilityStyles={useAvailabilityStyles}
+            helperText={helperText}
+            showHelperText={showHelperText}
             onSelect={(date) => {
               onChange(date);
               setOpen(false);

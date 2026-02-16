@@ -84,6 +84,7 @@ export default function Dashboard() {
           selectedDate={selectedDate}
           onChange={setSelectedDate}
           availableDates={availableDates}
+          showHelperText={false}
         />
       </section>
 

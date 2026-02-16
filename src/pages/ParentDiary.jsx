@@ -19,6 +19,7 @@ export default function ParentDiary() {
   const [showToast, setShowToast] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingDaily, setLoadingDaily] = useState(true);
+  const today = formatTodayDate();
 
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +29,6 @@ export default function ParentDiary() {
       if (cancelled) return;
       setSummaries(list);
       setSummariesLoaded(true);
-      const today = formatTodayDate();
       setDiaryDate(today);
     }
 
@@ -53,26 +53,31 @@ export default function ParentDiary() {
     async function load() {
       setLoadingDaily(true);
       try {
+        const exists = summaries.some((item) => item.date === diaryDate);
+        if (!exists && diaryDate === today) {
+          const templateDate = nearestDate(
+            diaryDate,
+            summaries.map((item) => item.date)
+          );
+          const template = templateDate ? await getDailyByDate(templateDate) : null;
+          if (cancelled) return;
+          const empty = createEmptyDailyData(diaryDate, template);
+          setDailyData(empty);
+          setFormValues({});
+          setSavedValues({});
+          return;
+        }
+
         const json = await getDailyByDate(diaryDate);
         if (cancelled) return;
-        const initialResponses = json.diary?.submitted ? json.diary?.responses || {} : {};
+        const initialResponses = json.diary?.responses || {};
         const sanitized = sanitizeResponses(initialResponses, json.diary?.questions || []);
         setDailyData(json);
         setFormValues(sanitized);
         setSavedValues(sanitized);
       } catch (error) {
-        const templateDate = nearestDate(
-          diaryDate,
-          summaries.map((item) => item.date)
-        );
-        let template = null;
-        if (templateDate) {
-          template = await getDailyByDate(templateDate);
-        }
-
         if (cancelled) return;
-        const empty = createEmptyDailyData(diaryDate, template);
-        setDailyData(empty);
+        setDailyData(null);
         setFormValues({});
         setSavedValues({});
       } finally {
@@ -87,19 +92,29 @@ export default function ParentDiary() {
     return () => {
       cancelled = true;
     };
-  }, [diaryDate, summariesLoaded]);
+  }, [diaryDate, summariesLoaded, summaries, today]);
 
   const submittedDates = useMemo(
     () => summaries.filter((item) => item.submitted).map((item) => item.date),
     [summaries]
   );
-  const availableDates = useMemo(() => summaries.map((item) => item.date), [summaries]);
+  const availableDates = useMemo(() => {
+    const set = new Set(submittedDates);
+    set.add(today);
+    return [...set].sort();
+  }, [submittedDates, today]);
   const hasSubmitted = Boolean(dailyData?.diary?.submitted);
+  const isTodaySelected = diaryDate === today;
+  const isEditable = isTodaySelected;
+  const todaySubmitted =
+    (diaryDate === today && hasSubmitted) ||
+    summaries.some((item) => item.date === today && item.submitted);
+  const markedDates = todaySubmitted ? [today] : [];
   const isDirty = JSON.stringify(formValues) !== JSON.stringify(savedValues);
 
   useEffect(() => {
-    window.__ellaDiaryDirty = isDirty;
-  }, [isDirty]);
+    window.__ellaDiaryDirty = isEditable && isDirty;
+  }, [isEditable, isDirty]);
 
   useEffect(() => {
     return () => {
@@ -110,6 +125,7 @@ export default function ParentDiary() {
   useEffect(() => {
     function handleDocumentClick(event) {
       if (!isDirty) return;
+      if (!isEditable) return;
 
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -143,12 +159,13 @@ export default function ParentDiary() {
   }, [isDirty]);
 
   useBeforeUnload((event) => {
+    if (!isEditable) return;
     if (!isDirty) return;
     event.preventDefault();
     event.returnValue = "";
   });
 
-  const canSubmit = Object.values(formValues).some((value) => {
+  const canSubmit = isEditable && Object.values(formValues).some((value) => {
     if (Array.isArray(value)) return value.length > 0;
     return String(value || "").trim().length > 0;
   });
@@ -215,6 +232,10 @@ export default function ParentDiary() {
               setDiaryDate(nextDate);
               return;
             }
+            if (!isEditable) {
+              setDiaryDate(nextDate);
+              return;
+            }
             const confirmed = window.confirm(
               "You have unsaved changes. If you switch date, new changes will be lost."
             );
@@ -223,9 +244,13 @@ export default function ParentDiary() {
             }
           }}
           availableDates={availableDates}
-          allowAll
-          markedDates={submittedDates}
-          useAvailabilityStyles={false}
+          markedDates={markedDates}
+          useAvailabilityStyles
+          helperText={
+            <span>
+              <span className="text-brand-500">●</span> Today submitted
+            </span>
+          }
         />
       </section>
 
@@ -250,7 +275,11 @@ export default function ParentDiary() {
         {hasSubmitted && (
           <section className="card p-6 text-center">
             <p className="text-lg font-semibold">You already submitted this day.</p>
-            <p className="mt-2 text-sm text-ink-500">You can still edit and save changes.</p>
+            <p className="mt-2 text-sm text-ink-500">
+              {isTodaySelected
+                ? "You can edit today's submission until midnight."
+                : "Past submissions are view-only."}
+            </p>
           </section>
         )}
 
@@ -262,8 +291,8 @@ export default function ParentDiary() {
               question={question}
               number={index + 1}
               value={formValues[question.id]}
-              followupValues={formValues}
-              onChange={(nextValue) =>
+                followupValues={formValues}
+                onChange={(nextValue) =>
                   setFormValues((prev) => {
                     const next = { ...prev, [question.id]: nextValue };
                     const visibleKeys = new Set(getVisibleFollowupKeys(question, nextValue));
@@ -278,17 +307,20 @@ export default function ParentDiary() {
                 onFollowupChange={(responseKey, nextValue) =>
                   setFormValues((prev) => ({ ...prev, [responseKey]: nextValue }))
                 }
+                disabled={!isEditable || loadingDaily}
               />
             ))}
           </div>
-          <button
-            type="button"
-            className={`btn-primary mt-8 w-full ${!canSubmit || saving || loadingDaily ? "opacity-50" : ""}`}
-            disabled={!canSubmit || saving || loadingDaily}
-            onClick={saveDiary}
-          >
-            {hasSubmitted ? "Save changes" : "Submit"}
-          </button>
+          {isEditable && (
+            <button
+              type="button"
+              className={`btn-primary mt-8 w-full ${!canSubmit || saving || loadingDaily ? "opacity-50" : ""}`}
+              disabled={!canSubmit || saving || loadingDaily}
+              onClick={saveDiary}
+            >
+              {hasSubmitted ? "Save changes" : "Submit"}
+            </button>
+          )}
         </form>
       </div>
     </div>
@@ -339,6 +371,7 @@ function QuestionBlock({
   followupValues,
   onChange,
   onFollowupChange,
+  disabled,
 }) {
   const toggleCheckbox = (option) => {
     const current = Array.isArray(value) ? value : [];
@@ -367,6 +400,7 @@ function QuestionBlock({
                 type="checkbox"
                 className="h-4 w-4 rounded border-ink-300"
                 checked={Array.isArray(value) ? value.includes(option) : false}
+                disabled={disabled}
                 onChange={() => toggleCheckbox(option)}
               />
               {option}
@@ -384,6 +418,7 @@ function QuestionBlock({
                 name={question.id}
                 className="h-4 w-4 border-ink-300"
                 checked={value === option}
+                disabled={disabled}
                 onChange={() => onChange(option)}
               />
               {option}
@@ -397,6 +432,7 @@ function QuestionBlock({
           className="input min-h-[140px]"
           placeholder="Write here"
           value={value || ""}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
       )}
@@ -411,6 +447,7 @@ function QuestionBlock({
               className="input min-h-[120px]"
               placeholder="Write here"
               value={followupValues[responseKey] || ""}
+              disabled={disabled}
               onChange={(event) => onFollowupChange(responseKey, event.target.value)}
             />
           </div>

@@ -21,7 +21,9 @@ export default function Calendar({
   onSelect,
   allowAll = false,
   markedDates = [],
-  useAvailabilityStyles = true
+  useAvailabilityStyles = true,
+  helperText,
+  showHelperText = true,
 }) {
   const availableSet = useMemo(() => new Set(availableDates), [availableDates]);
   const markedSet = useMemo(() => new Set(markedDates), [markedDates]);
@@ -113,15 +115,18 @@ export default function Calendar({
           );
         })}
       </div>
-      {useAvailabilityStyles ? (
-        <p className="mt-4 text-xs text-ink-500">
-          Dates in black have stories recorded. Grey dates have no records and cannot be selected.
-        </p>
-      ) : (
-        <p className="mt-4 text-xs text-ink-500">
-          All dates are selectable. Dates with a blue dot have submitted questionnaires.
-        </p>
-      )}
+      {showHelperText &&
+        (helperText ? (
+          <p className="mt-4 text-xs text-ink-500">{helperText}</p>
+        ) : useAvailabilityStyles ? (
+          <p className="mt-4 text-xs text-ink-500">
+            Dates in black have stories recorded. Grey dates have no records and cannot be selected.
+          </p>
+        ) : (
+          <p className="mt-4 text-xs text-ink-500">
+            All dates are selectable. Dates with a blue dot have submitted questionnaires.
+          </p>
+        ))}
     </div>
   );
 }
