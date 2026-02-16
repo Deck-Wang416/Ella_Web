@@ -109,7 +109,7 @@ export default function Calendar({
             >
               {date.getDate()}
               {isMarked && (
-                <span className="absolute -bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-brand-500" />
+                <span className="absolute -bottom-2.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-brand-500" />
               )}
             </button>
           );
