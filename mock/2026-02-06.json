@@ -114,18 +114,31 @@
           "Unsure",
           "Other"
         ],
-        "followup": {
-          "label": "If yes, briefly describe how your child used the story ideas:",
-          "showWhen": {
-            "operator": "includesAny",
-            "value": [
-              "Wanted related books",
-              "Wanted related TV shows/movies",
-              "Asked related questions",
-              "Other"
-            ]
+        "followups": [
+          {
+            "label": "If Other, please specify:",
+            "responseKey": "story_ideas_other",
+            "showWhen": {
+              "operator": "includesAny",
+              "value": [
+                "Other"
+              ]
+            }
+          },
+          {
+            "label": "If yes, briefly describe how your child used the story ideas:",
+            "responseKey": "story_ideas_followup",
+            "showWhen": {
+              "operator": "includesAny",
+              "value": [
+                "Wanted related books",
+                "Wanted related TV shows/movies",
+                "Asked related questions",
+                "Other"
+              ]
+            }
           }
-        }
+        ]
       },
       {
         "id": "read_book",

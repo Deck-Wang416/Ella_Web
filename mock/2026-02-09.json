@@ -24,7 +24,7 @@
   "diary": {
     "submitted": true,
     "submittedAt": "2026-02-09T19:20:00Z",
-    "updatedAt": "2026-02-09T19:45:00Z",
+    "updatedAt": "2026-02-16T03:24:38.344Z",
     "instructions": [
       "Please complete this diary once per day, preferably at the end of the day.",
       "There are no right or wrong answers — we are interested in your observations.",
@@ -113,18 +113,31 @@
           "Unsure",
           "Other"
         ],
-        "followup": {
-          "label": "If yes, briefly describe how your child used the story ideas:",
-          "showWhen": {
-            "operator": "includesAny",
-            "value": [
-              "Wanted related books",
-              "Wanted related TV shows/movies",
-              "Asked related questions",
-              "Other"
-            ]
+        "followups": [
+          {
+            "label": "If Other, please specify:",
+            "responseKey": "story_ideas_other",
+            "showWhen": {
+              "operator": "includesAny",
+              "value": [
+                "Other"
+              ]
+            }
+          },
+          {
+            "label": "If yes, briefly describe how your child used the story ideas:",
+            "responseKey": "story_ideas_followup",
+            "showWhen": {
+              "operator": "includesAny",
+              "value": [
+                "Wanted related books",
+                "Wanted related TV shows/movies",
+                "Asked related questions",
+                "Other"
+              ]
+            }
           }
-        }
+        ]
       },
       {
         "id": "read_book",
@@ -218,7 +231,7 @@
     ],
     "responses": {
       "prompted": [
-        "Sibling encouraged"
+        "Parent prompted"
       ],
       "present": [
         "Parent(s)",

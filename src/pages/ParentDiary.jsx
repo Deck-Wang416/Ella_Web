@@ -256,29 +256,27 @@ export default function ParentDiary() {
 
         <form className="card p-6" onSubmit={(event) => event.preventDefault()}>
           <div className="grid gap-8">
-            {questions.map((question, index) => (
-              <QuestionBlock
-                key={question.id}
-                question={question}
-                number={index + 1}
-                value={formValues[question.id]}
-                followupValue={formValues[`${question.id}_followup`]}
-                onChange={(nextValue) =>
+          {questions.map((question, index) => (
+            <QuestionBlock
+              key={question.id}
+              question={question}
+              number={index + 1}
+              value={formValues[question.id]}
+              followupValues={formValues}
+              onChange={(nextValue) =>
                   setFormValues((prev) => {
                     const next = { ...prev, [question.id]: nextValue };
-                    const followupKey = `${question.id}_followup`;
-                    if (
-                      question.followup &&
-                      !shouldShowFollowup(question.followup, nextValue) &&
-                      followupKey in next
-                    ) {
-                      delete next[followupKey];
-                    }
+                    const visibleKeys = new Set(getVisibleFollowupKeys(question, nextValue));
+                    getAllFollowupKeys(question).forEach((followupKey) => {
+                      if (!visibleKeys.has(followupKey) && followupKey in next) {
+                        delete next[followupKey];
+                      }
+                    });
                     return next;
                   })
                 }
-                onFollowupChange={(nextValue) =>
-                  setFormValues((prev) => ({ ...prev, [`${question.id}_followup`]: nextValue }))
+                onFollowupChange={(responseKey, nextValue) =>
+                  setFormValues((prev) => ({ ...prev, [responseKey]: nextValue }))
                 }
               />
             ))}
@@ -322,12 +320,13 @@ function sanitizeResponses(responses, questions) {
   const next = { ...(responses || {}) };
 
   questions.forEach((question) => {
-    if (!question.followup) return;
-    const followupKey = `${question.id}_followup`;
     const answer = next[question.id];
-    if (!shouldShowFollowup(question.followup, answer)) {
-      delete next[followupKey];
-    }
+    const visibleKeys = new Set(getVisibleFollowupKeys(question, answer));
+    getAllFollowupKeys(question).forEach((followupKey) => {
+      if (!visibleKeys.has(followupKey)) {
+        delete next[followupKey];
+      }
+    });
   });
 
   return next;
@@ -337,7 +336,7 @@ function QuestionBlock({
   question,
   number,
   value,
-  followupValue,
+  followupValues,
   onChange,
   onFollowupChange,
 }) {
@@ -350,7 +349,9 @@ function QuestionBlock({
     }
   };
 
-  const showFollowup = shouldShowFollowup(question.followup, value);
+  const visibleFollowups = getFollowups(question).filter((followup) =>
+    shouldShowFollowup(followup, value)
+  );
 
   return (
     <div className="grid gap-3">
@@ -400,19 +401,45 @@ function QuestionBlock({
         />
       )}
 
-      {showFollowup && (
-        <div className="grid gap-2">
-          <p className="text-xs text-ink-500">{question.followup.label}</p>
-          <textarea
-            className="input min-h-[120px]"
-            placeholder="Write here"
-            value={followupValue || ""}
-            onChange={(event) => onFollowupChange(event.target.value)}
-          />
-        </div>
-      )}
+      {visibleFollowups.map((followup, index) => {
+        const responseKey =
+          followup.responseKey || `${question.id}_followup${index === 0 ? "" : `_${index + 1}`}`;
+        return (
+          <div key={responseKey} className="grid gap-2">
+            <p className="text-xs text-ink-500">{followup.label}</p>
+            <textarea
+              className="input min-h-[120px]"
+              placeholder="Write here"
+              value={followupValues[responseKey] || ""}
+              onChange={(event) => onFollowupChange(responseKey, event.target.value)}
+            />
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function getFollowups(question) {
+  if (Array.isArray(question.followups)) return question.followups;
+  if (question.followup) return [{ ...question.followup, responseKey: `${question.id}_followup` }];
+  return [];
+}
+
+function getAllFollowupKeys(question) {
+  return getFollowups(question).map(
+    (followup, index) =>
+      followup.responseKey || `${question.id}_followup${index === 0 ? "" : `_${index + 1}`}`
+  );
+}
+
+function getVisibleFollowupKeys(question, answer) {
+  return getFollowups(question)
+    .filter((followup) => shouldShowFollowup(followup, answer))
+    .map(
+      (followup, index) =>
+        followup.responseKey || `${question.id}_followup${index === 0 ? "" : `_${index + 1}`}`
+    );
 }
 
 function shouldShowFollowup(followup, answer) {
