@@ -1,0 +1,23 @@
+{
+  "name": "ELLA",
+  "short_name": "ELLA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2b7bff",
+  "icons": [
+    {
+      "src": "/assets/ella_logo_square.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/ella_logo_square.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
