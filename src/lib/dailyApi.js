@@ -1,56 +1,72 @@
-const dailyCache = new Map();
-let summariesCache = null;
+const RAW_API_BASE = (
+  window.__API_BASE ||
+  import.meta.env.VITE_API_BASE ||
+  import.meta.env.API_BASE ||
+  "/api"
+).replace(/\/$/, "");
+const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE : `${RAW_API_BASE}/api`;
+const TIMEZONE = "America/New_York";
 
-export async function listDailySummaries() {
-  if (summariesCache) return summariesCache;
-  const response = await fetch('/api/daily');
-  if (!response.ok) throw new Error('Failed to load daily list');
-  const data = await response.json();
-  summariesCache = data;
-  return data;
+export class ApiError extends Error {
+  constructor(status, message, data = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
 }
 
-export async function getDailyByDate(date) {
-  if (dailyCache.has(date)) return dailyCache.get(date);
-  const response = await fetch(`/api/daily/${date}`);
-  if (!response.ok) throw new Error(`Failed to load daily data for ${date}`);
-  const data = await response.json();
-  dailyCache.set(date, data);
-  return data;
+function withTimezone(path) {
+  const tz = encodeURIComponent(TIMEZONE);
+  const join = path.includes("?") ? "&" : "?";
+  return `${API_BASE}${path}${join}timezone=${tz}`;
 }
 
-export async function updateDailyByDate(date, payload) {
-  const response = await fetch(`/api/daily/${date}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) throw new Error(`Failed to update daily data for ${date}`);
-  const data = await response.json();
-  dailyCache.set(date, payload);
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
 
-  if (summariesCache) {
-    const nextSummary = {
-      date: payload.date,
-      hasInteraction: Boolean(payload.dashboard?.hasInteraction),
-      submitted: Boolean(payload.diary?.submitted),
-    };
-    const exists = summariesCache.some((item) => item.date === payload.date);
-    summariesCache = exists
-      ? summariesCache.map((item) => (item.date === payload.date ? nextSummary : item))
-      : [...summariesCache, nextSummary].sort((a, b) => a.date.localeCompare(b.date));
+  if (!response.ok) {
+    const message =
+      (data && (data.message || data.error || data.detail)) ||
+      `Request failed (${response.status})`;
+    throw new ApiError(response.status, message, data);
   }
 
   return data;
 }
 
+export async function listDailySummaries() {
+  const data = await requestJson(withTimezone("/daily/summaries"));
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+}
+
+export async function getDailyByDate(date) {
+  return requestJson(withTimezone(`/daily/${date}`));
+}
+
+export async function updateDailyByDate(date, payload) {
+  return requestJson(withTimezone(`/daily/${date}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function formatTodayDate() {
   const today = new Date();
   const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -58,7 +74,7 @@ export function nearestDate(targetDate, dates) {
   if (!dates.length) return null;
 
   const toLocalDate = (dateStr) => {
-    const [year, month, day] = dateStr.split('-').map(Number);
+    const [year, month, day] = dateStr.split("-").map(Number);
     return new Date(year, month - 1, day);
   };
 

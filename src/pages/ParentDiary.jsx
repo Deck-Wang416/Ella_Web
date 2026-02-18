@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useBeforeUnload } from "react-router-dom";
 import DatePicker from "../components/DatePicker.jsx";
 import {
+  ApiError,
   formatTodayDate,
   getDailyByDate,
   listDailySummaries,
@@ -19,57 +20,57 @@ export default function ParentDiary() {
   const [showToast, setShowToast] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingDaily, setLoadingDaily] = useState(true);
+  const [errorText, setErrorText] = useState("");
   const today = formatTodayDate();
 
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
-      const list = await listDailySummaries();
-      if (cancelled) return;
-      setSummaries(list);
-      setSummariesLoaded(true);
-      setDiaryDate(today);
+      try {
+        const list = await listDailySummaries();
+        if (cancelled) return;
+
+        setSummaries(list);
+        setSummariesLoaded(true);
+
+        const selectableDates = list.filter((item) => item.diarySelectable).map((item) => item.date);
+        const initial = selectableDates.includes(today)
+          ? today
+          : nearestDate(today, selectableDates);
+        setDiaryDate(initial);
+      } catch (error) {
+        if (cancelled) return;
+        setSummariesLoaded(true);
+        setErrorText("Failed to load diary date list.");
+      }
     }
 
-    init().catch((error) => {
-      console.error(error);
-    });
+    init();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [today]);
 
   useEffect(() => {
     if (!diaryDate || !summariesLoaded) {
-      setLoadingDaily(true);
+      setLoadingDaily(false);
       setDailyData(null);
       setFormValues({});
+      setSavedValues({});
       return;
     }
 
     let cancelled = false;
     async function load() {
       setLoadingDaily(true);
-      try {
-        const exists = summaries.some((item) => item.date === diaryDate);
-        if (!exists && diaryDate === today) {
-          const templateDate = nearestDate(
-            diaryDate,
-            summaries.map((item) => item.date)
-          );
-          const template = templateDate ? await getDailyByDate(templateDate) : null;
-          if (cancelled) return;
-          const empty = createEmptyDailyData(diaryDate, template);
-          setDailyData(empty);
-          setFormValues({});
-          setSavedValues({});
-          return;
-        }
+      setErrorText("");
 
+      try {
         const json = await getDailyByDate(diaryDate);
         if (cancelled) return;
+
         const initialResponses = json.diary?.responses || {};
         const sanitized = sanitizeResponses(initialResponses, json.diary?.questions || []);
         setDailyData(json);
@@ -77,39 +78,58 @@ export default function ParentDiary() {
         setSavedValues(sanitized);
       } catch (error) {
         if (cancelled) return;
+
         setDailyData(null);
         setFormValues({});
         setSavedValues({});
+
+        if (error instanceof ApiError) {
+          if (error.status === 404) {
+            setErrorText("No diary record for this date.");
+          } else if (error.status === 400) {
+            setErrorText("Invalid request parameters.");
+          } else if (error.status === 422) {
+            setErrorText("Invalid diary payload format.");
+          } else if (error.status === 500) {
+            setErrorText("Server error. Please try again.");
+          } else {
+            setErrorText(error.message || "Failed to load diary data.");
+          }
+        } else {
+          setErrorText("Failed to load diary data.");
+        }
       } finally {
         if (!cancelled) setLoadingDaily(false);
       }
     }
 
-    load().catch((error) => {
-      console.error(error);
-    });
+    load();
 
     return () => {
       cancelled = true;
     };
-  }, [diaryDate, summariesLoaded, summaries, today]);
+  }, [diaryDate, summariesLoaded]);
 
-  const submittedDates = useMemo(
-    () => summaries.filter((item) => item.submitted).map((item) => item.date),
+  const selectedSummary = useMemo(
+    () => summaries.find((item) => item.date === diaryDate) || null,
+    [summaries, diaryDate]
+  );
+
+  const availableDates = useMemo(
+    () => summaries.filter((item) => item.diarySelectable).map((item) => item.date),
     [summaries]
   );
-  const availableDates = useMemo(() => {
-    const set = new Set(submittedDates);
-    set.add(today);
-    return [...set].sort();
-  }, [submittedDates, today]);
+
+  const markedDates = useMemo(
+    () =>
+      summaries
+        .filter((item) => item.todayBlueDot === true)
+        .map((item) => item.date),
+    [summaries]
+  );
+
   const hasSubmitted = Boolean(dailyData?.diary?.submitted);
-  const isTodaySelected = diaryDate === today;
-  const isEditable = isTodaySelected;
-  const todaySubmitted =
-    (diaryDate === today && hasSubmitted) ||
-    summaries.some((item) => item.date === today && item.submitted);
-  const markedDates = todaySubmitted ? [today] : [];
+  const isEditable = Boolean(selectedSummary?.diaryEditable ?? dailyData?.meta?.diaryEditable);
   const isDirty = JSON.stringify(formValues) !== JSON.stringify(savedValues);
 
   useEffect(() => {
@@ -124,8 +144,7 @@ export default function ParentDiary() {
 
   useEffect(() => {
     function handleDocumentClick(event) {
-      if (!isDirty) return;
-      if (!isEditable) return;
+      if (!isDirty || !isEditable) return;
 
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -156,64 +175,74 @@ export default function ParentDiary() {
     return () => {
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [isDirty]);
+  }, [isDirty, isEditable]);
 
   useBeforeUnload((event) => {
-    if (!isEditable) return;
-    if (!isDirty) return;
+    if (!isEditable || !isDirty) return;
     event.preventDefault();
     event.returnValue = "";
   });
 
-  const canSubmit = isEditable && Object.values(formValues).some((value) => {
-    if (Array.isArray(value)) return value.length > 0;
-    return String(value || "").trim().length > 0;
-  });
+  const questions = dailyData?.diary?.questions || [];
+  const instructions = dailyData?.diary?.instructions || [];
+
+  const canSubmit =
+    isEditable &&
+    Object.values(formValues).some((value) => {
+      if (Array.isArray(value)) return value.length > 0;
+      return String(value || "").trim().length > 0;
+    });
+
+  async function refreshSummaries() {
+    const latest = await listDailySummaries();
+    setSummaries(latest);
+  }
 
   async function saveDiary() {
     if (!dailyData || !diaryDate || !canSubmit || saving) return;
     setSaving(true);
 
     try {
-      const nowIso = new Date().toISOString();
       const sanitized = sanitizeResponses(formValues, questions);
-      const nextDiary = {
-        ...dailyData.diary,
-        submitted: true,
-        submittedAt: dailyData.diary.submittedAt || nowIso,
-        updatedAt: nowIso,
+      const payload = {
         responses: sanitized,
-      };
-      const nextData = {
-        ...dailyData,
-        diary: nextDiary,
+        submitted: true,
       };
 
-      await updateDailyByDate(diaryDate, nextData);
-      setDailyData(nextData);
-      setFormValues(sanitized);
-      setSavedValues(sanitized);
-      setSummaries((prev) =>
-        prev.some((item) => item.date === diaryDate)
-          ? prev.map((item) =>
-              item.date === diaryDate ? { ...item, submitted: true } : item
-            )
-          : [...prev, { date: diaryDate, hasInteraction: false, submitted: true }].sort(
-              (a, b) => a.date.localeCompare(b.date)
-            )
+      const updated = await updateDailyByDate(diaryDate, payload);
+      const nextResponses = sanitizeResponses(
+        updated?.diary?.responses || {},
+        updated?.diary?.questions || []
       );
+
+      setDailyData(updated);
+      setFormValues(nextResponses);
+      setSavedValues(nextResponses);
+      await refreshSummaries();
 
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
+      setErrorText("");
     } catch (error) {
-      console.error(error);
+      if (error instanceof ApiError) {
+        if (error.status === 409) {
+          setErrorText("仅可编辑今天");
+        } else if (error.status === 422) {
+          setErrorText("请求字段不合法");
+        } else if (error.status === 400) {
+          setErrorText("参数错误");
+        } else if (error.status === 500) {
+          setErrorText("Server error. Please try again.");
+        } else {
+          setErrorText(error.message || "Failed to save diary.");
+        }
+      } else {
+        setErrorText("Failed to save diary.");
+      }
     } finally {
       setSaving(false);
     }
   }
-
-  const instructions = dailyData?.diary?.instructions || [];
-  const questions = dailyData?.diary?.questions || [];
 
   return (
     <div className="relative grid gap-6">
@@ -228,11 +257,7 @@ export default function ParentDiary() {
           label="Date"
           selectedDate={diaryDate}
           onChange={(nextDate) => {
-            if (!isDirty) {
-              setDiaryDate(nextDate);
-              return;
-            }
-            if (!isEditable) {
+            if (!isDirty || !isEditable) {
               setDiaryDate(nextDate);
               return;
             }
@@ -246,19 +271,19 @@ export default function ParentDiary() {
           availableDates={availableDates}
           markedDates={markedDates}
           useAvailabilityStyles
-          helperText={
-            <span>
-              <span className="text-brand-500">●</span> Today submitted
-            </span>
-          }
+          helperText={<span><span className="text-brand-500">●</span> Today submitted</span>}
         />
       </section>
 
+      {errorText && (
+        <section className="card p-5 text-sm text-red-600">{errorText}</section>
+      )}
+
       <div className="relative grid gap-6">
         {loadingDaily && (
-          <div className="absolute inset-0 z-20 flex items-start justify-center rounded-3xl bg-white/70 pt-16 backdrop-blur-[1px]">
-            <div className="rounded-2xl border border-ink-200 bg-white px-4 py-2 text-sm text-ink-600 shadow-sm">
-              Loading questionnaire...
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-[1px]">
+            <div className="rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+              Loading...
             </div>
           </div>
         )}
@@ -275,22 +300,20 @@ export default function ParentDiary() {
         {hasSubmitted && (
           <section className="card p-6 text-center">
             <p className="text-lg font-semibold">You already submitted this day.</p>
-            <p className="mt-2 text-sm text-ink-500">
-              {isTodaySelected
-                ? "You can edit today's submission until midnight."
-                : "Past submissions are view-only."}
-            </p>
+            {!isEditable && (
+              <p className="mt-2 text-sm text-ink-500">Past submissions are view-only.</p>
+            )}
           </section>
         )}
 
         <form className="card p-6" onSubmit={(event) => event.preventDefault()}>
           <div className="grid gap-8">
-          {questions.map((question, index) => (
-            <QuestionBlock
-              key={question.id}
-              question={question}
-              number={index + 1}
-              value={formValues[question.id]}
+            {questions.map((question, index) => (
+              <QuestionBlock
+                key={question.id}
+                question={question}
+                number={index + 1}
+                value={formValues[question.id]}
                 followupValues={formValues}
                 onChange={(nextValue) =>
                   setFormValues((prev) => {
@@ -325,27 +348,6 @@ export default function ParentDiary() {
       </div>
     </div>
   );
-}
-
-function createEmptyDailyData(date, template) {
-  return {
-    date,
-    dashboard: {
-      hasInteraction: false,
-      photos: [],
-      words: [],
-      highlight: [],
-      ask: [],
-    },
-    diary: {
-      submitted: false,
-      submittedAt: null,
-      updatedAt: null,
-      instructions: template?.diary?.instructions || [],
-      questions: template?.diary?.questions || [],
-      responses: {},
-    },
-  };
 }
 
 function sanitizeResponses(responses, questions) {

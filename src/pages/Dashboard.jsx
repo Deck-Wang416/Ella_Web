@@ -5,6 +5,7 @@ import {
   getDailyByDate,
   listDailySummaries,
   nearestDate,
+  ApiError,
 } from "../lib/dailyApi.js";
 
 export default function Dashboard() {
@@ -12,9 +13,12 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [dailyData, setDailyData] = useState(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [errorText, setErrorText] = useState("");
+  const [loadingSummaries, setLoadingSummaries] = useState(true);
+  const [loadingDaily, setLoadingDaily] = useState(true);
 
   const availableDates = useMemo(
-    () => summaries.filter((item) => item.hasInteraction).map((item) => item.date),
+    () => summaries.filter((item) => item.dashboardSelectable).map((item) => item.date),
     [summaries]
   );
 
@@ -22,19 +26,25 @@ export default function Dashboard() {
     let cancelled = false;
 
     async function init() {
-      const list = await listDailySummaries();
-      if (cancelled) return;
-      setSummaries(list);
+      setLoadingSummaries(true);
+      try {
+        const list = await listDailySummaries();
+        if (cancelled) return;
+        setSummaries(list);
 
-      const today = formatTodayDate();
-      const initial = nearestDate(today, availableDatesFromList(list));
-      setSelectedDate(initial);
+        const today = formatTodayDate();
+        const initial = nearestDate(today, list.filter((x) => x.dashboardSelectable).map((x) => x.date));
+        setSelectedDate(initial);
+        setErrorText("");
+      } catch (error) {
+        if (cancelled) return;
+        setErrorText("Failed to load date list.");
+      } finally {
+        if (!cancelled) setLoadingSummaries(false);
+      }
     }
 
-    init().catch((error) => {
-      console.error(error);
-    });
-
+    init();
     return () => {
       cancelled = true;
     };
@@ -43,21 +53,33 @@ export default function Dashboard() {
   useEffect(() => {
     if (!selectedDate) {
       setDailyData(null);
+      setLoadingDaily(false);
       return;
     }
 
     let cancelled = false;
     async function load() {
-      const json = await getDailyByDate(selectedDate);
-      if (cancelled) return;
-      setDailyData(json);
-      setPhotoIndex(0);
+      setLoadingDaily(true);
+      try {
+        const json = await getDailyByDate(selectedDate);
+        if (cancelled) return;
+        setDailyData(json);
+        setPhotoIndex(0);
+        setErrorText("");
+      } catch (error) {
+        if (cancelled) return;
+        setDailyData(null);
+        if (error instanceof ApiError && error.status === 404) {
+          setErrorText("No dashboard record for this date.");
+          return;
+        }
+        setErrorText("Failed to load dashboard data.");
+      } finally {
+        if (!cancelled) setLoadingDaily(false);
+      }
     }
 
-    load().catch((error) => {
-      console.error(error);
-    });
-
+    load();
     return () => {
       cancelled = true;
     };
@@ -77,7 +99,15 @@ export default function Dashboard() {
   }, [photos.length]);
 
   return (
-    <div className="grid gap-6">
+    <div className="relative grid gap-6">
+      {(loadingSummaries || loadingDaily) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-[1px]">
+          <div className="rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+            Loading...
+          </div>
+        </div>
+      )}
+
       <section>
         <DatePicker
           label="Date"
@@ -87,6 +117,10 @@ export default function Dashboard() {
           showHelperText={false}
         />
       </section>
+
+      {errorText && (
+        <section className="card p-5 text-sm text-red-600">{errorText}</section>
+      )}
 
       <section className="card p-5">
         <div className="flex items-center justify-between">
@@ -186,8 +220,4 @@ export default function Dashboard() {
       </section>
     </div>
   );
-}
-
-function availableDatesFromList(list) {
-  return list.filter((item) => item.hasInteraction).map((item) => item.date);
 }

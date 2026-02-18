@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { formatTodayDate, getDailyByDate } from '../lib/dailyApi.js';
+import { ApiError, formatTodayDate, getDailyByDate } from '../lib/dailyApi.js';
 
 const REMINDER_SLOTS = ['18:00', '21:00'];
 
@@ -31,8 +31,8 @@ async function isTodaySubmitted() {
   try {
     const json = await getDailyByDate(today);
     return Boolean(json?.diary?.submitted);
-  } catch {
-    // If today's file doesn't exist, treat as not submitted.
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return false;
     return false;
   }
 }
