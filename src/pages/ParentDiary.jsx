@@ -54,7 +54,15 @@ export default function ParentDiary() {
   }, [today]);
 
   useEffect(() => {
-    if (!diaryDate || !summariesLoaded) {
+    if (!summariesLoaded) {
+      setLoadingDaily(true);
+      setDailyData(null);
+      setFormValues({});
+      setSavedValues({});
+      return;
+    }
+
+    if (!diaryDate) {
       setLoadingDaily(false);
       setDailyData(null);
       setFormValues({});
