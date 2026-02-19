@@ -2,10 +2,12 @@ import { useState } from "react";
 import Header from "./Header.jsx";
 import ProfileModal from "./ProfileModal.jsx";
 import { useDiaryReminder } from "../hooks/useDiaryReminder.js";
+import { useWebPushSubscription } from "../hooks/useWebPushSubscription.js";
 
 export default function AppLayout({ active, children }) {
   const [profileOpen, setProfileOpen] = useState(false);
-  useDiaryReminder();
+  useDiaryReminder(import.meta.env.VITE_ENABLE_LOCAL_REMINDER === "true");
+  useWebPushSubscription();
 
   return (
     <div className="min-h-screen">

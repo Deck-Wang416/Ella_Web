@@ -1,10 +1,6 @@
-const RAW_API_BASE = (
-  window.__API_BASE ||
-  import.meta.env.VITE_API_BASE ||
-  import.meta.env.API_BASE ||
-  "/api"
-).replace(/\/$/, "");
-const API_BASE = RAW_API_BASE.endsWith("/api") ? RAW_API_BASE : `${RAW_API_BASE}/api`;
+import { getApiBase } from "./apiBase.js";
+
+const API_BASE = getApiBase();
 const TIMEZONE = "America/New_York";
 
 export class ApiError extends Error {

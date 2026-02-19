@@ -48,7 +48,7 @@ async function showReminder(slot) {
   if (submitted) return;
 
   const registration = await navigator.serviceWorker?.ready;
-  const title = 'ELLA Reminder';
+  const title = 'Diary Reminder';
   const body = "Please complete today's Parent Diary questionnaire.";
 
   if (registration) {
@@ -65,11 +65,12 @@ async function showReminder(slot) {
   localStorage.setItem(slotKey(today, slot), '1');
 }
 
-export function useDiaryReminder() {
+export function useDiaryReminder(enabled = true) {
   const timerRef = useRef(null);
   const startedRef = useRef(false);
 
   useEffect(() => {
+    if (!enabled) return;
     if (startedRef.current) return;
     startedRef.current = true;
 

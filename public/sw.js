@@ -8,7 +8,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('push', (event) => {
   let payload = {
-    title: 'ELLA Reminder',
+    title: 'Diary Reminder',
     body: "Please complete today's Parent Diary.",
   };
 

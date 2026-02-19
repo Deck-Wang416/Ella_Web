@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import profileData from "../data/profile.json";
+import { ensureWebPushSubscription } from "../hooks/useWebPushSubscription.js";
 
 export default function ProfileModal({ open, onClose }) {
   const [themes, setThemes] = useState(profileData.themes);
   const [newTheme, setNewTheme] = useState("");
+  const [subscribing, setSubscribing] = useState(false);
+  const [subscriptionMessage, setSubscriptionMessage] = useState("");
 
   const canAdd = useMemo(() => newTheme.trim().length > 0, [newTheme]);
 
@@ -81,6 +84,34 @@ export default function ProfileModal({ open, onClose }) {
                 +
               </button>
             </div>
+          </div>
+
+          <div className="card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="section-title">Notifications</p>
+              <button
+                type="button"
+                className={`btn-primary ${subscribing ? "opacity-50" : ""}`}
+                disabled={subscribing}
+                onClick={async () => {
+                  setSubscribing(true);
+                  setSubscriptionMessage("");
+                  try {
+                    await ensureWebPushSubscription();
+                    setSubscriptionMessage("Notifications enabled.");
+                  } catch (error) {
+                    setSubscriptionMessage(error?.message || "Failed to enable notifications.");
+                  } finally {
+                    setSubscribing(false);
+                  }
+                }}
+              >
+                {subscribing ? "Enabling..." : "Enable Notifications"}
+              </button>
+            </div>
+            {subscriptionMessage && (
+              <p className="mt-2 text-xs text-ink-600">{subscriptionMessage}</p>
+            )}
           </div>
         </div>
       </div>
