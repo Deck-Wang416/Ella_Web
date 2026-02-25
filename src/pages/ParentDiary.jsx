@@ -94,12 +94,14 @@ export default function ParentDiary() {
         if (error instanceof ApiError) {
           if (error.status === 404) {
             setErrorText("No diary record for this date.");
+          } else if (error.status === 409) {
+            setErrorText("Only today is editable.");
           } else if (error.status === 400) {
             setErrorText("Invalid request parameters.");
           } else if (error.status === 422) {
-            setErrorText("Invalid diary payload format.");
-          } else if (error.status === 500) {
-            setErrorText("Server error. Please try again.");
+            setErrorText("Invalid input or request.");
+          } else if (error.status >= 500) {
+            setErrorText("Service is temporarily unavailable. Please try again later.");
           } else {
             setErrorText(error.message || "Failed to load diary data.");
           }
@@ -234,13 +236,13 @@ export default function ParentDiary() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
-          setErrorText("仅可编辑今天");
+          setErrorText("Only today is editable.");
         } else if (error.status === 422) {
-          setErrorText("请求字段不合法");
+          setErrorText("Invalid input or request.");
         } else if (error.status === 400) {
           setErrorText("参数错误");
-        } else if (error.status === 500) {
-          setErrorText("Server error. Please try again.");
+        } else if (error.status >= 500) {
+          setErrorText("Service is temporarily unavailable. Please try again later.");
         } else {
           setErrorText(error.message || "Failed to save diary.");
         }

@@ -73,6 +73,10 @@ export default function Dashboard() {
           setErrorText("No dashboard record for this date.");
           return;
         }
+        if (error instanceof ApiError && error.status >= 500) {
+          setErrorText("Service is temporarily unavailable. Please try again later.");
+          return;
+        }
         setErrorText("Failed to load dashboard data.");
       } finally {
         if (!cancelled) setLoadingDaily(false);
