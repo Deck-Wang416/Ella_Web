@@ -36,7 +36,12 @@ function delay(ms) {
   });
 }
 
-export default function ParentAudioRecorder({ date, parentAudio, onRefreshDaily }) {
+export default function ParentAudioRecorder({
+  date,
+  parentAudio,
+  onRefreshDaily,
+  onRecorderBusyChange,
+}) {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [sessionId, setSessionId] = useState(parentAudio?.activeSession?.sessionId || null);
@@ -66,6 +71,7 @@ export default function ParentAudioRecorder({ date, parentAudio, onRefreshDaily 
   const isRecordingRef = useRef(false);
   const stopPromiseRef = useRef(null);
   const startTimestampRef = useRef(null);
+  const busyState = isRecording || uploading || isCompleting;
 
   useEffect(() => {
     nextChunkIndexRef.current = nextChunkIndex;
@@ -86,6 +92,14 @@ export default function ParentAudioRecorder({ date, parentAudio, onRefreshDaily 
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  useEffect(() => {
+    if (typeof onRecorderBusyChange !== "function") return undefined;
+    onRecorderBusyChange(busyState);
+    return () => {
+      onRecorderBusyChange(false);
+    };
+  }, [busyState, onRecorderBusyChange]);
 
   useEffect(() => {
     let cancelled = false;

@@ -37,21 +37,8 @@ export async function ensureWebPushSubscription() {
     });
   }
 
-  const json = subscription.toJSON();
-  console.log("[WebPush] endpoint:", subscription.endpoint);
-  console.log("[WebPush] p256dh:", json.keys?.p256dh || "");
-  console.log("[WebPush] auth:", json.keys?.auth || "");
-
   const result = await upsertWebPushSubscription(subscription);
-  console.log("[WebPush] upsert url:", result.url);
-  console.log("[WebPush] upsert method:", result.method);
-  console.log("[WebPush] upsert status:", result.status);
-  console.log("[WebPush] upsert response:", result.data);
-
   const verify = await getSubscriptionsByCaregiver(1);
-  console.log("[WebPush] verify url:", verify.url);
-  console.log("[WebPush] verify status:", verify.status);
-  console.log("[WebPush] verify response:", verify.data);
 
   return { subscription, upsert: result, verify };
 }
