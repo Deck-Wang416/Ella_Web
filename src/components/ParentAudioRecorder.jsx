@@ -193,12 +193,24 @@ export default function ParentAudioRecorder({ date, parentAudio, onRefreshDaily 
 
   async function processPendingBlobs() {
     if (uploadLoopRunningRef.current) return;
-    if (!sessionIdRef.current) return;
 
     uploadLoopRunningRef.current = true;
     setUploading(true);
 
     while (pendingBlobsRef.current.length > 0) {
+      if (!sessionIdRef.current) {
+        try {
+          await ensureSession();
+        } catch (error) {
+          const fallback =
+            error instanceof ApiError && error.status >= 500
+              ? "Service is temporarily unavailable. Please try again later."
+              : "Unable to start recording. Please try again.";
+          setRecorderError(fallback);
+          break;
+        }
+      }
+
       const blob = pendingBlobsRef.current[0];
       const chunkIndex = nextChunkIndexRef.current;
       let uploaded = false;
@@ -266,8 +278,6 @@ export default function ParentAudioRecorder({ date, parentAudio, onRefreshDaily 
       const mimeType = pickSupportedMimeType();
       recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
-      await ensureSession();
-
       streamRef.current = stream;
       mediaRecorderRef.current = recorder;
       startTimestampRef.current = Date.now();
@@ -334,8 +344,14 @@ export default function ParentAudioRecorder({ date, parentAudio, onRefreshDaily 
 
       await waitForUploadsToDrain();
 
-      if (!sessionIdRef.current) {
-        throw new Error("Missing sessionId");
+      if (!sessionIdRef.current || lastUploadedChunkIndexRef.current < 0) {
+        setSessionStatus("idle");
+        setSessionId(null);
+        setNextChunkIndex(0);
+        setElapsedSeconds(0);
+        setUploadError("");
+        setRecorderError("No audio was captured. Please try again.");
+        return;
       }
 
       await completeRecordingSession(
