@@ -7,6 +7,7 @@ import {
   nearestDate,
   ApiError,
 } from "../lib/dailyApi.js";
+import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
 
 export default function Dashboard() {
   const [summaries, setSummaries] = useState([]);
@@ -102,6 +103,25 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, [photos.length]);
 
+  async function refreshDailyData() {
+    if (!selectedDate) return;
+
+    try {
+      setLoadingDaily(true);
+      const json = await getDailyByDate(selectedDate);
+      setDailyData(json);
+      setErrorText("");
+    } catch (error) {
+      if (error instanceof ApiError && error.status >= 500) {
+        setErrorText("Service is temporarily unavailable. Please try again later.");
+        return;
+      }
+      setErrorText("Failed to load dashboard data.");
+    } finally {
+      setLoadingDaily(false);
+    }
+  }
+
   return (
     <div className="relative grid gap-6">
       {(loadingSummaries || loadingDaily) && (
@@ -126,51 +146,59 @@ export default function Dashboard() {
         <section className="card p-5 text-sm text-red-600">{errorText}</section>
       )}
 
-      <section className="card p-5">
-        <div className="flex items-center justify-between">
-          <p className="section-title">Photo</p>
-          {photos.length > 0 && (
-            <span className="text-xs text-ink-500">
-              {photoIndex + 1}/{photos.length}
-            </span>
-          )}
-        </div>
-        <div className="relative mt-4">
-          {photos.length > 0 ? (
-            <img
-              src={photos[photoIndex]}
-              alt="Child and ELLA"
-              className="h-48 w-full rounded-2xl object-cover"
-            />
-          ) : (
-            <div className="flex h-48 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
-              No photo for this date.
-            </div>
-          )}
-          {photos.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  setPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
-                }
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
-                aria-label="Previous photo"
-              >
-                &lt;
-              </button>
-              <button
-                type="button"
-                onClick={() => setPhotoIndex((prev) => (prev + 1) % photos.length)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
-                aria-label="Next photo"
-              >
-                &gt;
-              </button>
-            </>
-          )}
-        </div>
-      </section>
+      {dailyData?.condition === "parent" ? (
+        <ParentAudioRecorder
+          date={selectedDate}
+          parentAudio={dailyData?.parentAudio || null}
+          onRefreshDaily={refreshDailyData}
+        />
+      ) : (
+        <section className="card p-5">
+          <div className="flex items-center justify-between">
+            <p className="section-title">Photo</p>
+            {photos.length > 0 && (
+              <span className="text-xs text-ink-500">
+                {photoIndex + 1}/{photos.length}
+              </span>
+            )}
+          </div>
+          <div className="relative mt-4">
+            {photos.length > 0 ? (
+              <img
+                src={photos[photoIndex]}
+                alt="Child and ELLA"
+                className="h-48 w-full rounded-2xl object-cover"
+              />
+            ) : (
+              <div className="flex h-48 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
+                No photo for this date.
+              </div>
+            )}
+            {photos.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
+                  }
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
+                  aria-label="Previous photo"
+                >
+                  &lt;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoIndex((prev) => (prev + 1) % photos.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
+                  aria-label="Next photo"
+                >
+                  &gt;
+                </button>
+              </>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="card p-5">
         <p className="section-title">Words from today</p>
