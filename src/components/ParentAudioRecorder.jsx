@@ -517,32 +517,18 @@ export default function ParentAudioRecorder({
     }
   }
 
-  const buttonLabel = isRecording ? "Stop" : sessionId ? "Resume" : "Start";
-  const statusLabel = useMemo(() => {
-    if (!parentAudio?.enabled) return "Recording unavailable";
+  const uploadStatusLabel = useMemo(() => {
     if (isCompleting) return "Finalizing recording";
-    if (isRecording) return "Recording in progress";
-    if (completedDate === date) return "Recording completed";
-    if (uploadError) return "Upload interrupted";
-    if (sessionStatus === "completed") return "Recording completed";
-    if (sessionId) return "Session ready to continue";
+    if (uploading) return "Saving audio";
+    if (uploadError) return "Upload paused";
+    if (lastUploadedChunkIndex >= 0) return "Audio saved";
     return "Ready to record";
-  }, [
-    completedDate,
-    date,
-    isCompleting,
-    isRecording,
-    parentAudio?.enabled,
-    sessionId,
-    sessionStatus,
-    uploadError,
-  ]);
+  }, [isCompleting, lastUploadedChunkIndex, uploading, uploadError]);
 
   return (
     <section className="card p-5">
       <div className="flex items-center justify-between">
         <p className="section-title">Recording</p>
-        <span className="text-xs text-ink-500">{statusLabel}</span>
       </div>
 
       <div className="mt-5 flex flex-col items-center gap-5 text-center">
@@ -555,7 +541,7 @@ export default function ParentAudioRecorder({
               ? "border-red-200 bg-red-500 text-white hover:bg-red-600"
               : "border-brand-200 bg-brand-500 text-white hover:bg-brand-600"
           } ${!parentAudio?.enabled || uploading || isCompleting ? "cursor-not-allowed opacity-50" : ""}`}
-          aria-label={buttonLabel}
+          aria-label={isRecording ? "Stop recording" : "Start recording"}
         >
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-base font-semibold">
             {isRecording ? "Stop" : "Start"}
@@ -564,33 +550,20 @@ export default function ParentAudioRecorder({
 
         <div className="grid gap-1">
           <p className="font-display text-4xl">{formatElapsed(elapsedSeconds)}</p>
-          <p className="text-sm text-ink-500">
-            {sessionId ? `Session ${sessionId}` : "No active session"}
-          </p>
         </div>
 
         <div className="grid w-full gap-3 rounded-3xl bg-ink-100 p-4 text-left text-sm text-ink-700">
           <div className="flex items-center justify-between">
-            <span>Next chunk</span>
-            <span className="font-semibold">{nextChunkIndex}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Last uploaded</span>
-            <span className="font-semibold">
-              {lastUploadedChunkIndex >= 0 ? lastUploadedChunkIndex : "None"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
             <span>Upload status</span>
-            <span className="font-semibold">
-              {uploading ? "Uploading..." : uploadError ? "Needs attention" : "Synced"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>Screen</span>
-            <span className="font-semibold">{wakeLockActive ? "Kept awake" : "Default"}</span>
+            <span className="font-semibold">{uploadStatusLabel}</span>
           </div>
         </div>
+
+        {wakeLockActive && (
+          <p className="w-full rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
+            Screen will stay awake while recording.
+          </p>
+        )}
 
         {recorderError && (
           <p className="w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -606,7 +579,7 @@ export default function ParentAudioRecorder({
 
         {uploadError && (
           <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-left text-sm text-amber-700">
-            <p>{uploadError}</p>
+            <p>Upload paused. Please retry.</p>
             <button
               type="button"
               onClick={() => {
