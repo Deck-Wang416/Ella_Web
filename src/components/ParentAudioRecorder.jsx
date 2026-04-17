@@ -110,6 +110,9 @@ export default function ParentAudioRecorder({
 
     async function syncFromActiveSession() {
       if (!parentAudio?.enabled) {
+        sessionIdRef.current = null;
+        lastUploadedChunkIndexRef.current = -1;
+        nextChunkIndexRef.current = 0;
         setSessionId(null);
         setNextChunkIndex(0);
         setLastUploadedChunkIndex(-1);
@@ -123,6 +126,9 @@ export default function ParentAudioRecorder({
       const activeSession = parentAudio?.activeSession;
       if (!activeSession) {
         if (!isRecordingRef.current) {
+          sessionIdRef.current = null;
+          lastUploadedChunkIndexRef.current = -1;
+          nextChunkIndexRef.current = 0;
           setSessionId(null);
           setNextChunkIndex(0);
           setLastUploadedChunkIndex(-1);
@@ -137,6 +143,9 @@ export default function ParentAudioRecorder({
       }
 
       setCompletedDate(null);
+      sessionIdRef.current = activeSession.sessionId;
+      lastUploadedChunkIndexRef.current = activeSession.lastChunkIndex ?? -1;
+      nextChunkIndexRef.current = (activeSession.lastChunkIndex ?? -1) + 1;
       setSessionId(activeSession.sessionId);
       setSessionStatus(activeSession.status || "recording");
       setLastUploadedChunkIndex(activeSession.lastChunkIndex ?? -1);
@@ -145,11 +154,29 @@ export default function ParentAudioRecorder({
       try {
         const precise = await getRecordingSession(activeSession.sessionId);
         if (cancelled) return;
+        sessionIdRef.current = precise.sessionId || activeSession.sessionId;
+        lastUploadedChunkIndexRef.current =
+          precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1;
+        nextChunkIndexRef.current =
+          (precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1) + 1;
         setSessionStatus(precise.status || activeSession.status || "recording");
         setLastUploadedChunkIndex(precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1);
         setNextChunkIndex((precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1) + 1);
-      } catch {
+      } catch (error) {
         if (cancelled) return;
+        if (error instanceof ApiError && error.status === 404) {
+          sessionIdRef.current = null;
+          lastUploadedChunkIndexRef.current = -1;
+          nextChunkIndexRef.current = 0;
+          setSessionId(null);
+          setSessionStatus("idle");
+          setLastUploadedChunkIndex(-1);
+          setNextChunkIndex(0);
+          setUploadError("");
+          if (onRefreshDaily) {
+            onRefreshDaily();
+          }
+        }
       }
     }
 
@@ -261,6 +288,8 @@ export default function ParentAudioRecorder({
           const nextIndex = (response.lastChunkIndex ?? chunkIndex) + 1;
           uploaded = true;
           setUploadError("");
+          lastUploadedChunkIndexRef.current = response.lastChunkIndex ?? chunkIndex;
+          nextChunkIndexRef.current = nextIndex;
           setLastUploadedChunkIndex(response.lastChunkIndex ?? chunkIndex);
           setNextChunkIndex(nextIndex);
           break;
@@ -292,6 +321,9 @@ export default function ParentAudioRecorder({
 
     const created = await createRecordingSession(date);
     setCompletedDate(null);
+    sessionIdRef.current = created.sessionId;
+    lastUploadedChunkIndexRef.current = created.lastChunkIndex ?? -1;
+    nextChunkIndexRef.current = (created.lastChunkIndex ?? -1) + 1;
     setSessionId(created.sessionId);
     setSessionStatus(created.status || "recording");
     setLastUploadedChunkIndex(created.lastChunkIndex ?? -1);
@@ -356,7 +388,7 @@ export default function ParentAudioRecorder({
   }
 
   async function startRecording() {
-    if (!parentAudio?.enabled) return;
+    if (!parentAudio?.enabled || isRecordingRef.current || isCompleting || uploading) return;
     setRecorderError("");
     setUploadError("");
     setWakeLockMessage("");
@@ -365,6 +397,11 @@ export default function ParentAudioRecorder({
     let recorder = null;
 
     try {
+      await ensureSession();
+      if (!sessionIdRef.current) {
+        throw new Error("Missing recording session id.");
+      }
+
       setElapsedSeconds(0);
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = pickSupportedMimeType();
@@ -437,7 +474,7 @@ export default function ParentAudioRecorder({
 
       await waitForUploadsToDrain();
 
-      if (!sessionIdRef.current || lastUploadedChunkIndexRef.current < 0) {
+      if (!sessionIdRef.current) {
         setSessionStatus("idle");
         setSessionId(null);
         setNextChunkIndex(0);
@@ -447,13 +484,13 @@ export default function ParentAudioRecorder({
         return;
       }
 
-      await completeRecordingSession(
-        sessionIdRef.current,
-        lastUploadedChunkIndexRef.current
-      );
+      await completeRecordingSession(sessionIdRef.current, lastUploadedChunkIndexRef.current);
 
       setSessionStatus("completed");
       setCompletedDate(date);
+      sessionIdRef.current = null;
+      lastUploadedChunkIndexRef.current = -1;
+      nextChunkIndexRef.current = 0;
       setSessionId(null);
       setNextChunkIndex(0);
       setElapsedSeconds(0);
