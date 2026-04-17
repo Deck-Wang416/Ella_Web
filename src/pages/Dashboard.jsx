@@ -208,8 +208,7 @@ export default function Dashboard() {
       {activeCondition === "parent" ? (
         <ParentAudioRecorder
           date={selectedDate}
-          parentAudio={dailyData?.parentAudio || null}
-          onRefreshDaily={refreshDailyData}
+          enabled
           onRecorderBusyChange={setRecorderBusy}
         />
       ) : (

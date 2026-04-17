@@ -3,7 +3,6 @@ import { ApiError } from "../lib/dailyApi.js";
 import {
   completeRecordingSession,
   createRecordingSession,
-  getRecordingSession,
   uploadRecordingChunk,
 } from "../lib/recordingsApi.js";
 
@@ -18,15 +17,8 @@ function formatElapsed(totalSeconds) {
 }
 
 function pickSupportedMimeType() {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-    "",
-  ];
-
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", ""];
   if (typeof MediaRecorder === "undefined") return "";
-
   return candidates.find((item) => !item || MediaRecorder.isTypeSupported(item)) || "";
 }
 
@@ -36,26 +28,15 @@ function delay(ms) {
   });
 }
 
-export default function ParentAudioRecorder({
-  date,
-  parentAudio,
-  onRefreshDaily,
-  onRecorderBusyChange,
-}) {
+export default function ParentAudioRecorder({ date, enabled = false, onRecorderBusyChange }) {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [sessionId, setSessionId] = useState(parentAudio?.activeSession?.sessionId || null);
-  const [nextChunkIndex, setNextChunkIndex] = useState(
-    parentAudio?.activeSession ? parentAudio.activeSession.lastChunkIndex + 1 : 0
-  );
+  const [sessionId, setSessionId] = useState(null);
+  const [nextChunkIndex, setNextChunkIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [lastUploadedChunkIndex, setLastUploadedChunkIndex] = useState(
-    parentAudio?.activeSession?.lastChunkIndex ?? -1
-  );
-  const [sessionStatus, setSessionStatus] = useState(
-    parentAudio?.activeSession?.status || "idle"
-  );
+  const [lastUploadedChunkIndex, setLastUploadedChunkIndex] = useState(-1);
+  const [sessionStatus, setSessionStatus] = useState("idle");
   const [recorderError, setRecorderError] = useState("");
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockMessage, setWakeLockMessage] = useState("");
@@ -67,9 +48,9 @@ export default function ParentAudioRecorder({
   const pendingBlobsRef = useRef([]);
   const uploadLoopRunningRef = useRef(false);
   const uploadErrorRef = useRef("");
-  const nextChunkIndexRef = useRef(nextChunkIndex);
-  const lastUploadedChunkIndexRef = useRef(lastUploadedChunkIndex);
-  const sessionIdRef = useRef(sessionId);
+  const nextChunkIndexRef = useRef(0);
+  const lastUploadedChunkIndexRef = useRef(-1);
+  const sessionIdRef = useRef(null);
   const isRecordingRef = useRef(false);
   const stopPromiseRef = useRef(null);
   const startTimestampRef = useRef(null);
@@ -106,86 +87,11 @@ export default function ParentAudioRecorder({
   }, [busyState, onRecorderBusyChange]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function syncFromActiveSession() {
-      if (!parentAudio?.enabled) {
-        sessionIdRef.current = null;
-        lastUploadedChunkIndexRef.current = -1;
-        nextChunkIndexRef.current = 0;
-        setSessionId(null);
-        setNextChunkIndex(0);
-        setLastUploadedChunkIndex(-1);
-        setElapsedSeconds(0);
-        setSessionStatus("idle");
-        setUploadError("");
-        setCompletedDate(null);
-        return;
-      }
-
-      const activeSession = parentAudio?.activeSession;
-      if (!activeSession) {
-        if (!isRecordingRef.current) {
-          sessionIdRef.current = null;
-          lastUploadedChunkIndexRef.current = -1;
-          nextChunkIndexRef.current = 0;
-          setSessionId(null);
-          setNextChunkIndex(0);
-          setLastUploadedChunkIndex(-1);
-          setElapsedSeconds(0);
-          setSessionStatus("idle");
-          setUploadError("");
-          if (completedDate !== date) {
-            setCompletedDate(null);
-          }
-        }
-        return;
-      }
-
-      setCompletedDate(null);
-      sessionIdRef.current = activeSession.sessionId;
-      lastUploadedChunkIndexRef.current = activeSession.lastChunkIndex ?? -1;
-      nextChunkIndexRef.current = (activeSession.lastChunkIndex ?? -1) + 1;
-      setSessionId(activeSession.sessionId);
-      setSessionStatus(activeSession.status || "recording");
-      setLastUploadedChunkIndex(activeSession.lastChunkIndex ?? -1);
-      setNextChunkIndex((activeSession.lastChunkIndex ?? -1) + 1);
-
-      try {
-        const precise = await getRecordingSession(activeSession.sessionId);
-        if (cancelled) return;
-        sessionIdRef.current = precise.sessionId || activeSession.sessionId;
-        lastUploadedChunkIndexRef.current =
-          precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1;
-        nextChunkIndexRef.current =
-          (precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1) + 1;
-        setSessionStatus(precise.status || activeSession.status || "recording");
-        setLastUploadedChunkIndex(precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1);
-        setNextChunkIndex((precise.lastChunkIndex ?? activeSession.lastChunkIndex ?? -1) + 1);
-      } catch (error) {
-        if (cancelled) return;
-        if (error instanceof ApiError && error.status === 404) {
-          sessionIdRef.current = null;
-          lastUploadedChunkIndexRef.current = -1;
-          nextChunkIndexRef.current = 0;
-          setSessionId(null);
-          setSessionStatus("idle");
-          setLastUploadedChunkIndex(-1);
-          setNextChunkIndex(0);
-          setUploadError("");
-          if (onRefreshDaily) {
-            onRefreshDaily();
-          }
-        }
-      }
-    }
-
-    syncFromActiveSession();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [date, parentAudio]);
+    if (isRecordingRef.current) return;
+    resetLocalSessionState();
+    setElapsedSeconds(0);
+    setCompletedDate(null);
+  }, [date]);
 
   useEffect(() => {
     if (!isRecording) return undefined;
@@ -257,6 +163,18 @@ export default function ParentAudioRecorder({
     };
   }, []);
 
+  function resetLocalSessionState() {
+    sessionIdRef.current = null;
+    lastUploadedChunkIndexRef.current = -1;
+    nextChunkIndexRef.current = 0;
+    pendingBlobsRef.current = [];
+    setSessionId(null);
+    setSessionStatus("idle");
+    setLastUploadedChunkIndex(-1);
+    setNextChunkIndex(0);
+    setUploadError("");
+  }
+
   async function processPendingBlobs() {
     if (uploadLoopRunningRef.current) return;
 
@@ -265,16 +183,10 @@ export default function ParentAudioRecorder({
 
     while (pendingBlobsRef.current.length > 0) {
       if (!sessionIdRef.current) {
-        try {
-          await ensureSession();
-        } catch (error) {
-          const fallback =
-            error instanceof ApiError && error.status >= 500
-              ? "Service is temporarily unavailable. Please try again later."
-              : "Unable to start recording. Please try again.";
-          setRecorderError(fallback);
-          break;
-        }
+        uploadLoopRunningRef.current = false;
+        setUploading(false);
+        setRecorderError("Unable to start recording. Please try again.");
+        return;
       }
 
       const blob = pendingBlobsRef.current[0];
@@ -329,22 +241,7 @@ export default function ParentAudioRecorder({
     setLastUploadedChunkIndex(created.lastChunkIndex ?? -1);
     setNextChunkIndex((created.lastChunkIndex ?? -1) + 1);
     setElapsedSeconds(0);
-    if (onRefreshDaily) {
-      onRefreshDaily();
-    }
     return created.sessionId;
-  }
-
-  function resetLocalSessionState() {
-    sessionIdRef.current = null;
-    lastUploadedChunkIndexRef.current = -1;
-    nextChunkIndexRef.current = 0;
-    pendingBlobsRef.current = [];
-    setSessionId(null);
-    setSessionStatus("idle");
-    setLastUploadedChunkIndex(-1);
-    setNextChunkIndex(0);
-    setUploadError("");
   }
 
   async function requestWakeLock() {
@@ -400,14 +297,12 @@ export default function ParentAudioRecorder({
   }
 
   async function startRecording() {
-    if (!parentAudio?.enabled || isRecordingRef.current || isCompleting || uploading) return;
+    if (!enabled || isRecordingRef.current || isCompleting || uploading) return;
     setRecorderError("");
     setUploadError("");
     setWakeLockMessage("");
-
-    if (!parentAudio?.activeSession) {
-      resetLocalSessionState();
-    }
+    setCompletedDate(null);
+    resetLocalSessionState();
 
     let stream = null;
     let recorder = null;
@@ -512,9 +407,6 @@ export default function ParentAudioRecorder({
       setElapsedSeconds(0);
       setIsRecording(false);
       setUploadError("");
-      if (onRefreshDaily) {
-        onRefreshDaily();
-      }
     } catch (error) {
       const fallback =
         error instanceof ApiError && error.status >= 500
@@ -541,6 +433,11 @@ export default function ParentAudioRecorder({
     return "Ready to record";
   }, [isCompleting, lastUploadedChunkIndex, uploading, uploadError]);
 
+  const buttonAriaLabel = useMemo(() => {
+    if (!enabled) return "Recording unavailable";
+    return isRecording ? "Stop recording" : "Start recording";
+  }, [enabled, isRecording]);
+
   return (
     <section className="card p-5">
       <div className="flex items-center justify-between">
@@ -551,13 +448,13 @@ export default function ParentAudioRecorder({
         <button
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={!parentAudio?.enabled || uploading || isCompleting}
+          disabled={!enabled || uploading || isCompleting}
           className={`flex h-36 w-36 items-center justify-center rounded-full border-8 transition ${
             isRecording
               ? "border-red-200 bg-red-500 text-white hover:bg-red-600"
               : "border-brand-200 bg-brand-500 text-white hover:bg-brand-600"
-          } ${!parentAudio?.enabled || uploading || isCompleting ? "cursor-not-allowed opacity-50" : ""}`}
-          aria-label={isRecording ? "Stop recording" : "Start recording"}
+          } ${!enabled || uploading || isCompleting ? "cursor-not-allowed opacity-50" : ""}`}
+          aria-label={buttonAriaLabel}
         >
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-base font-semibold">
             {isRecording ? "Stop" : "Start"}

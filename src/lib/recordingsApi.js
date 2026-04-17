@@ -39,10 +39,6 @@ export async function createRecordingSession(date) {
   });
 }
 
-export async function getRecordingSession(sessionId) {
-  return requestJson(`${API_BASE}/recordings/sessions/${encodeURIComponent(sessionId)}`);
-}
-
 export async function uploadRecordingChunk(sessionId, chunkIndex, blob) {
   if (!sessionId) {
     throw new Error("Missing recording session id.");
