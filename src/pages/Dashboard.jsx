@@ -43,9 +43,7 @@ export default function Dashboard() {
         const list = await listDailySummaries();
         if (cancelled) return;
         setSummaries(list);
-
-        const initial = nearestDate(today, list.filter((x) => x.dashboardSelectable).map((x) => x.date));
-        setSelectedDate(initial || today);
+        setSelectedDate(today);
         setErrorText("");
       } catch (error) {
         if (cancelled) return;
