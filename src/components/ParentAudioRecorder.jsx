@@ -57,6 +57,8 @@ export default function ParentAudioRecorder({
     parentAudio?.activeSession?.status || "idle"
   );
   const [recorderError, setRecorderError] = useState("");
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [wakeLockMessage, setWakeLockMessage] = useState("");
   const [isCompleting, setIsCompleting] = useState(false);
   const [completedDate, setCompletedDate] = useState(null);
 
@@ -71,6 +73,8 @@ export default function ParentAudioRecorder({
   const isRecordingRef = useRef(false);
   const stopPromiseRef = useRef(null);
   const startTimestampRef = useRef(null);
+  const wakeLockRef = useRef(null);
+  const wakeLockRequestIdRef = useRef(0);
   const busyState = isRecording || uploading || isCompleting;
 
   useEffect(() => {
@@ -191,6 +195,14 @@ export default function ParentAudioRecorder({
 
   useEffect(() => {
     return () => {
+      wakeLockRequestIdRef.current += 1;
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {
+          // Ignore release errors during unmount.
+        });
+        wakeLockRef.current = null;
+      }
+
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         try {
           mediaRecorderRef.current.stop();
@@ -202,6 +214,19 @@ export default function ParentAudioRecorder({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    async function handleVisibilityChange() {
+      if (!isRecordingRef.current || document.visibilityState !== "visible") return;
+      if (wakeLockRef.current) return;
+      await requestWakeLock();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -278,10 +303,63 @@ export default function ParentAudioRecorder({
     return created.sessionId;
   }
 
+  async function requestWakeLock() {
+    if (!("wakeLock" in navigator)) {
+      setWakeLockActive(false);
+      setWakeLockMessage("Please keep your screen awake while recording.");
+      return;
+    }
+
+    const requestId = wakeLockRequestIdRef.current + 1;
+    wakeLockRequestIdRef.current = requestId;
+
+    try {
+      const sentinel = await navigator.wakeLock.request("screen");
+      if (wakeLockRequestIdRef.current !== requestId || !isRecordingRef.current) {
+        await sentinel.release().catch(() => {
+          // Ignore release errors if state changed while the request was pending.
+        });
+        return;
+      }
+
+      wakeLockRef.current = sentinel;
+      setWakeLockActive(true);
+      setWakeLockMessage("");
+      sentinel.addEventListener("release", () => {
+        if (wakeLockRef.current === sentinel) {
+          wakeLockRef.current = null;
+        }
+        setWakeLockActive(false);
+      });
+    } catch {
+      setWakeLockActive(false);
+      setWakeLockMessage("Please keep your screen awake while recording.");
+    }
+  }
+
+  async function releaseWakeLock() {
+    wakeLockRequestIdRef.current += 1;
+    const sentinel = wakeLockRef.current;
+    if (!sentinel) {
+      setWakeLockActive(false);
+      return;
+    }
+
+    wakeLockRef.current = null;
+    try {
+      await sentinel.release();
+    } catch {
+      // Ignore release failures; the system may already have released it.
+    } finally {
+      setWakeLockActive(false);
+    }
+  }
+
   async function startRecording() {
     if (!parentAudio?.enabled) return;
     setRecorderError("");
     setUploadError("");
+    setWakeLockMessage("");
 
     let stream = null;
     let recorder = null;
@@ -317,6 +395,7 @@ export default function ParentAudioRecorder({
       recorder.start(CHUNK_TIMESLICE_MS);
       setIsRecording(true);
       setSessionStatus("recording");
+      void requestWakeLock();
     } catch (error) {
       const fallback =
         error instanceof ApiError && error.status >= 500
@@ -390,6 +469,7 @@ export default function ParentAudioRecorder({
           : "Recording saved partially. Please retry completion.";
       setRecorderError(fallback);
     } finally {
+      await releaseWakeLock();
       setIsCompleting(false);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -469,11 +549,21 @@ export default function ParentAudioRecorder({
               {uploading ? "Uploading..." : uploadError ? "Needs attention" : "Synced"}
             </span>
           </div>
+          <div className="flex items-center justify-between">
+            <span>Screen</span>
+            <span className="font-semibold">{wakeLockActive ? "Kept awake" : "Default"}</span>
+          </div>
         </div>
 
         {recorderError && (
           <p className="w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
             {recorderError}
+          </p>
+        )}
+
+        {wakeLockMessage && (
+          <p className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            {wakeLockMessage}
           </p>
         )}
 
