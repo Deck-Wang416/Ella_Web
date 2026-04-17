@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useBeforeUnload } from "react-router-dom";
+import DailyConditionInitModal from "../components/DailyConditionInitModal.jsx";
 import DatePicker from "../components/DatePicker.jsx";
 import {
   ApiError,
   formatTodayDate,
   getDailyByDate,
+  initializeDailyByDate,
   listDailySummaries,
   nearestDate,
   updateDailyByDate,
@@ -21,6 +23,9 @@ export default function ParentDiary() {
   const [saving, setSaving] = useState(false);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [errorText, setErrorText] = useState("");
+  const [initModalOpen, setInitModalOpen] = useState(false);
+  const [initErrorText, setInitErrorText] = useState("");
+  const [initializingDaily, setInitializingDaily] = useState(false);
   const today = formatTodayDate();
 
   useEffect(() => {
@@ -37,7 +42,7 @@ export default function ParentDiary() {
         const selectableDates = list.filter((item) => item.diarySelectable).map((item) => item.date);
         const initial = selectableDates.includes(today)
           ? today
-          : nearestDate(today, selectableDates);
+          : nearestDate(today, selectableDates) || today;
         setDiaryDate(initial);
       } catch (error) {
         if (cancelled) return;
@@ -93,7 +98,13 @@ export default function ParentDiary() {
 
         if (error instanceof ApiError) {
           if (error.status === 404) {
-            setErrorText("No diary record for this date.");
+            if (diaryDate === today) {
+              setInitModalOpen(true);
+              setInitErrorText("");
+              setErrorText("");
+            } else {
+              setErrorText("No diary record for this date.");
+            }
           } else if (error.status === 409) {
             setErrorText("Only today is editable.");
           } else if (error.status === 400) {
@@ -126,8 +137,12 @@ export default function ParentDiary() {
   );
 
   const availableDates = useMemo(
-    () => summaries.filter((item) => item.diarySelectable).map((item) => item.date),
-    [summaries]
+    () =>
+      [...new Set([
+        ...summaries.filter((item) => item.diarySelectable).map((item) => item.date),
+        today,
+      ])],
+    [summaries, today]
   );
 
   const markedDates = useMemo(
@@ -208,6 +223,35 @@ export default function ParentDiary() {
     setSummaries(latest);
   }
 
+  async function initializeDaily(condition) {
+    if (!diaryDate) return;
+    setInitializingDaily(true);
+    setInitErrorText("");
+
+    try {
+      await initializeDailyByDate(diaryDate, condition);
+      const latest = await getDailyByDate(diaryDate);
+      const summaryList = await listDailySummaries();
+      const initialResponses = latest.diary?.responses || {};
+      const sanitized = sanitizeResponses(initialResponses, latest.diary?.questions || []);
+
+      setSummaries(summaryList);
+      setDailyData(latest);
+      setFormValues(sanitized);
+      setSavedValues(sanitized);
+      setInitModalOpen(false);
+      setErrorText("");
+    } catch (error) {
+      if (error instanceof ApiError && error.status >= 500) {
+        setInitErrorText("Service is temporarily unavailable. Please try again later.");
+      } else {
+        setInitErrorText("Unable to initialize daily record. Please try again.");
+      }
+    } finally {
+      setInitializingDaily(false);
+    }
+  }
+
   async function saveDiary() {
     if (!dailyData || !diaryDate || !canSubmit || saving) return;
     setSaving(true);
@@ -262,7 +306,16 @@ export default function ParentDiary() {
         </div>
       )}
 
-        <section>
+      <DailyConditionInitModal
+        open={initModalOpen}
+        date={diaryDate}
+        loading={initializingDaily}
+        errorText={initErrorText}
+        onClose={() => setInitModalOpen(false)}
+        onSelect={initializeDaily}
+      />
+
+      <section>
         <DatePicker
           label="Date"
           selectedDate={diaryDate}

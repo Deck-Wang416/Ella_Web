@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import DailyConditionInitModal from "../components/DailyConditionInitModal.jsx";
 import DatePicker from "../components/DatePicker.jsx";
 import {
   formatTodayDate,
   getDailyByDate,
+  initializeDailyByDate,
   listDailySummaries,
   nearestDate,
   ApiError,
@@ -18,10 +20,18 @@ export default function Dashboard() {
   const [loadingSummaries, setLoadingSummaries] = useState(true);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [recorderBusy, setRecorderBusy] = useState(false);
+  const [initModalOpen, setInitModalOpen] = useState(false);
+  const [initErrorText, setInitErrorText] = useState("");
+  const [initializingDaily, setInitializingDaily] = useState(false);
+  const today = formatTodayDate();
 
   const availableDates = useMemo(
-    () => summaries.filter((item) => item.dashboardSelectable).map((item) => item.date),
-    [summaries]
+    () =>
+      [...new Set([
+        ...summaries.filter((item) => item.dashboardSelectable).map((item) => item.date),
+        today,
+      ])],
+    [summaries, today]
   );
 
   useEffect(() => {
@@ -34,9 +44,8 @@ export default function Dashboard() {
         if (cancelled) return;
         setSummaries(list);
 
-        const today = formatTodayDate();
         const initial = nearestDate(today, list.filter((x) => x.dashboardSelectable).map((x) => x.date));
-        setSelectedDate(initial);
+        setSelectedDate(initial || today);
         setErrorText("");
       } catch (error) {
         if (cancelled) return;
@@ -50,7 +59,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [today]);
 
   useEffect(() => {
     if (!selectedDate) {
@@ -72,6 +81,12 @@ export default function Dashboard() {
         if (cancelled) return;
         setDailyData(null);
         if (error instanceof ApiError && error.status === 404) {
+          if (selectedDate === today) {
+            setInitModalOpen(true);
+            setInitErrorText("");
+            setErrorText("");
+            return;
+          }
           setErrorText("No dashboard record for this date.");
           return;
         }
@@ -89,7 +104,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDate]);
+  }, [selectedDate, today]);
 
   const activeCondition = dailyData?.condition || "robot";
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
@@ -124,6 +139,31 @@ export default function Dashboard() {
     }
   }
 
+  async function initializeDaily(condition) {
+    if (!selectedDate) return;
+    setInitializingDaily(true);
+    setInitErrorText("");
+
+    try {
+      await initializeDailyByDate(selectedDate, condition);
+      const latest = await getDailyByDate(selectedDate);
+      const summaryList = await listDailySummaries();
+      setSummaries(summaryList);
+      setDailyData(latest);
+      setPhotoIndex(0);
+      setInitModalOpen(false);
+      setErrorText("");
+    } catch (error) {
+      if (error instanceof ApiError && error.status >= 500) {
+        setInitErrorText("Service is temporarily unavailable. Please try again later.");
+      } else {
+        setInitErrorText("Unable to initialize daily record. Please try again.");
+      }
+    } finally {
+      setInitializingDaily(false);
+    }
+  }
+
   function confirmRecorderLeave(message) {
     if (!recorderBusy) return true;
     return window.confirm(message);
@@ -138,6 +178,15 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <DailyConditionInitModal
+        open={initModalOpen}
+        date={selectedDate}
+        loading={initializingDaily}
+        errorText={initErrorText}
+        onClose={() => setInitModalOpen(false)}
+        onSelect={initializeDaily}
+      />
 
       <section>
         <DatePicker

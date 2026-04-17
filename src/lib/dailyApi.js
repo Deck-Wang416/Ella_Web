@@ -58,6 +58,16 @@ export async function updateDailyByDate(date, payload) {
   });
 }
 
+export async function initializeDailyByDate(date, condition) {
+  return requestJson(withTimezone(`/daily/${date}/initialize`), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ condition }),
+  });
+}
+
 export function formatTodayDate() {
   const today = new Date();
   const year = today.getFullYear();
