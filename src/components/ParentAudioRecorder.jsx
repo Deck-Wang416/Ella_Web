@@ -335,6 +335,18 @@ export default function ParentAudioRecorder({
     return created.sessionId;
   }
 
+  function resetLocalSessionState() {
+    sessionIdRef.current = null;
+    lastUploadedChunkIndexRef.current = -1;
+    nextChunkIndexRef.current = 0;
+    pendingBlobsRef.current = [];
+    setSessionId(null);
+    setSessionStatus("idle");
+    setLastUploadedChunkIndex(-1);
+    setNextChunkIndex(0);
+    setUploadError("");
+  }
+
   async function requestWakeLock() {
     if (!("wakeLock" in navigator)) {
       setWakeLockActive(false);
@@ -392,6 +404,10 @@ export default function ParentAudioRecorder({
     setRecorderError("");
     setUploadError("");
     setWakeLockMessage("");
+
+    if (!parentAudio?.activeSession) {
+      resetLocalSessionState();
+    }
 
     let stream = null;
     let recorder = null;
