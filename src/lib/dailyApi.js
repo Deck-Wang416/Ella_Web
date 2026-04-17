@@ -18,12 +18,6 @@ function withTimezone(path) {
   return `${API_BASE}${path}${join}timezone=${tz}`;
 }
 
-function withTimezoneAndMode(path, mode) {
-  const base = withTimezone(path);
-  if (!mode) return base;
-  return `${base}&mode=${encodeURIComponent(mode)}`;
-}
-
 async function requestJson(url, options) {
   const response = await fetch(url, options);
   let data = null;
@@ -50,12 +44,12 @@ export async function listDailySummaries() {
   return [];
 }
 
-export async function getDailyByDate(date, mode) {
-  return requestJson(withTimezoneAndMode(`/daily/${date}`, mode));
+export async function getDailyByDate(date) {
+  return requestJson(withTimezone(`/daily/${date}`));
 }
 
-export async function updateDailyByDate(date, payload, mode) {
-  return requestJson(withTimezoneAndMode(`/daily/${date}`, mode), {
+export async function updateDailyByDate(date, payload) {
+  return requestJson(withTimezone(`/daily/${date}`), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

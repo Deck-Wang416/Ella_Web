@@ -29,7 +29,7 @@ function nextSchedule(now) {
 async function isTodaySubmitted() {
   const today = formatTodayDate();
   try {
-    const json = await getDailyByDate(today, 'robot');
+    const json = await getDailyByDate(today);
     return Boolean(json?.diary?.submitted);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return false;

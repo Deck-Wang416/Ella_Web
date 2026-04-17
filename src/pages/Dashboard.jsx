@@ -7,7 +7,6 @@ import {
   nearestDate,
   ApiError,
 } from "../lib/dailyApi.js";
-import ModeSwitch from "../components/ModeSwitch.jsx";
 import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
 
 export default function Dashboard() {
@@ -18,7 +17,6 @@ export default function Dashboard() {
   const [errorText, setErrorText] = useState("");
   const [loadingSummaries, setLoadingSummaries] = useState(true);
   const [loadingDaily, setLoadingDaily] = useState(true);
-  const [modePreference, setModePreference] = useState(null);
   const [recorderBusy, setRecorderBusy] = useState(false);
 
   const availableDates = useMemo(
@@ -39,7 +37,6 @@ export default function Dashboard() {
         const today = formatTodayDate();
         const initial = nearestDate(today, list.filter((x) => x.dashboardSelectable).map((x) => x.date));
         setSelectedDate(initial);
-        setModePreference(null);
         setErrorText("");
       } catch (error) {
         if (cancelled) return;
@@ -66,7 +63,7 @@ export default function Dashboard() {
     async function load() {
       setLoadingDaily(true);
       try {
-        const json = await getDailyByDate(selectedDate, modePreference);
+        const json = await getDailyByDate(selectedDate);
         if (cancelled) return;
         setDailyData(json);
         setPhotoIndex(0);
@@ -92,13 +89,10 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDate, modePreference]);
+  }, [selectedDate]);
 
-  const availableModes = dailyData?.availableModes || [];
-  const activeMode =
-    dailyData?.selectedMode || modePreference || dailyData?.defaultMode || availableModes[0] || null;
-
-  const photos = activeMode === "robot" ? dailyData?.dashboard?.photos || [] : [];
+  const activeCondition = dailyData?.condition || "robot";
+  const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
   const words = dailyData?.dashboard?.words || [];
   const highlight = dailyData?.dashboard?.highlight || [];
   const ask = dailyData?.dashboard?.ask || [];
@@ -116,7 +110,7 @@ export default function Dashboard() {
 
     try {
       setLoadingDaily(true);
-      const json = await getDailyByDate(selectedDate, activeMode);
+      const json = await getDailyByDate(selectedDate);
       setDailyData(json);
       setErrorText("");
     } catch (error) {
@@ -154,30 +148,17 @@ export default function Dashboard() {
               return;
             }
             setSelectedDate(nextDate);
-            setModePreference(null);
           }}
           availableDates={availableDates}
           showHelperText={false}
         />
       </section>
 
-      <ModeSwitch
-        availableModes={availableModes}
-        selectedMode={activeMode}
-        disabled={loadingDaily}
-        onChange={(nextMode) => {
-          if (!confirmRecorderLeave("Recording is still in progress. If you switch mode now, the current recording may stop before it finishes uploading. Continue?")) {
-            return;
-          }
-          setModePreference(nextMode);
-        }}
-      />
-
       {errorText && (
         <section className="card p-5 text-sm text-red-600">{errorText}</section>
       )}
 
-      {activeMode === "parent" ? (
+      {activeCondition === "parent" ? (
         <ParentAudioRecorder
           date={selectedDate}
           parentAudio={dailyData?.parentAudio || null}

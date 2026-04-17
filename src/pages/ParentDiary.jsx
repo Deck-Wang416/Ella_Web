@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useBeforeUnload } from "react-router-dom";
 import DatePicker from "../components/DatePicker.jsx";
-import ModeSwitch from "../components/ModeSwitch.jsx";
 import {
   ApiError,
   formatTodayDate,
@@ -22,7 +21,6 @@ export default function ParentDiary() {
   const [saving, setSaving] = useState(false);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [errorText, setErrorText] = useState("");
-  const [modePreference, setModePreference] = useState(null);
   const today = formatTodayDate();
 
   useEffect(() => {
@@ -41,7 +39,6 @@ export default function ParentDiary() {
           ? today
           : nearestDate(today, selectableDates);
         setDiaryDate(initial);
-        setModePreference(null);
       } catch (error) {
         if (cancelled) return;
         setSummariesLoaded(true);
@@ -79,7 +76,7 @@ export default function ParentDiary() {
       setErrorText("");
 
       try {
-        const json = await getDailyByDate(diaryDate, modePreference);
+        const json = await getDailyByDate(diaryDate);
         if (cancelled) return;
 
         const initialResponses = json.diary?.responses || {};
@@ -121,7 +118,7 @@ export default function ParentDiary() {
     return () => {
       cancelled = true;
     };
-  }, [diaryDate, modePreference, summariesLoaded]);
+  }, [diaryDate, summariesLoaded]);
 
   const selectedSummary = useMemo(
     () => summaries.find((item) => item.date === diaryDate) || null,
@@ -132,9 +129,6 @@ export default function ParentDiary() {
     () => summaries.filter((item) => item.diarySelectable).map((item) => item.date),
     [summaries]
   );
-  const availableModes = dailyData?.availableModes || [];
-  const activeMode =
-    dailyData?.selectedMode || modePreference || dailyData?.defaultMode || availableModes[0] || null;
 
   const markedDates = useMemo(
     () =>
@@ -225,15 +219,13 @@ export default function ParentDiary() {
         submitted: true,
       };
 
-      const updated = await updateDailyByDate(diaryDate, payload, activeMode);
-      const resolvedMode = updated?.selectedMode || activeMode;
+      const updated = await updateDailyByDate(diaryDate, payload);
       const nextResponses = sanitizeResponses(
         updated?.diary?.responses || {},
         updated?.diary?.questions || []
       );
 
       setDailyData(updated);
-      setModePreference(resolvedMode || null);
       setFormValues(nextResponses);
       setSavedValues(nextResponses);
       await refreshSummaries();
@@ -277,7 +269,6 @@ export default function ParentDiary() {
           onChange={(nextDate) => {
             if (!isDirty || !isEditable) {
               setDiaryDate(nextDate);
-              setModePreference(null);
               return;
             }
             const confirmed = window.confirm(
@@ -285,7 +276,6 @@ export default function ParentDiary() {
             );
             if (confirmed) {
               setDiaryDate(nextDate);
-              setModePreference(null);
             }
           }}
           availableDates={availableDates}
@@ -294,24 +284,6 @@ export default function ParentDiary() {
           helperText={<span><span className="text-brand-500">●</span> Today submitted</span>}
         />
       </section>
-
-      <ModeSwitch
-        availableModes={availableModes}
-        selectedMode={activeMode}
-        disabled={loadingDaily}
-        onChange={(nextMode) => {
-          if (!isDirty || !isEditable) {
-            setModePreference(nextMode);
-            return;
-          }
-          const confirmed = window.confirm(
-            "You have unsaved changes. If you switch mode, new changes will be lost."
-          );
-          if (confirmed) {
-            setModePreference(nextMode);
-          }
-        }}
-      />
 
       {errorText && (
         <section className="card p-5 text-sm text-red-600">{errorText}</section>
