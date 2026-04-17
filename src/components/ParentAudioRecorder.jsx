@@ -36,10 +36,6 @@ function delay(ms) {
   });
 }
 
-function logRecordingEvent(event, details = {}) {
-  console.info(`[Recording] ${event}`, details);
-}
-
 export default function ParentAudioRecorder({
   date,
   parentAudio,
@@ -206,10 +202,6 @@ export default function ParentAudioRecorder({
 
   useEffect(() => {
     function handlePageHide() {
-      logRecordingEvent("pagehide triggered", {
-        sessionId: sessionIdRef.current,
-        isRecording: isRecordingRef.current,
-      });
       const recorder = mediaRecorderRef.current;
       if (!recorder || recorder.state !== "recording") return;
       try {
@@ -291,20 +283,10 @@ export default function ParentAudioRecorder({
 
       for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
         try {
-          logRecordingEvent("upload start", {
-            sessionId: sessionIdRef.current,
-            chunkIndex,
-            attempt,
-          });
           const response = await uploadRecordingChunk(sessionIdRef.current, chunkIndex, blob);
           pendingBlobsRef.current.shift();
           const nextIndex = (response.lastChunkIndex ?? chunkIndex) + 1;
           uploaded = true;
-          logRecordingEvent("upload success", {
-            sessionId: sessionIdRef.current,
-            chunkIndex,
-            nextChunkIndex: nextIndex,
-          });
           setUploadError("");
           lastUploadedChunkIndexRef.current = response.lastChunkIndex ?? chunkIndex;
           nextChunkIndexRef.current = nextIndex;
@@ -338,10 +320,6 @@ export default function ParentAudioRecorder({
     if (sessionIdRef.current) return sessionIdRef.current;
 
     const created = await createRecordingSession(date);
-    logRecordingEvent("createSession success", {
-      sessionId: created.sessionId,
-      date,
-    });
     setCompletedDate(null);
     sessionIdRef.current = created.sessionId;
     lastUploadedChunkIndexRef.current = created.lastChunkIndex ?? -1;
@@ -506,10 +484,6 @@ export default function ParentAudioRecorder({
         const stopPromise = new Promise((resolve) => {
           stopPromiseRef.current = { resolve };
         });
-        logRecordingEvent("mediaRecorder.stop called", {
-          sessionId: sessionIdRef.current,
-          lastUploadedChunkIndex: lastUploadedChunkIndexRef.current,
-        });
         recorder.stop();
         await stopPromise;
       }
@@ -526,10 +500,6 @@ export default function ParentAudioRecorder({
         return;
       }
 
-      logRecordingEvent("complete called", {
-        sessionId: sessionIdRef.current,
-        finalChunkIndex: lastUploadedChunkIndexRef.current,
-      });
       await completeRecordingSession(sessionIdRef.current, lastUploadedChunkIndexRef.current);
 
       setSessionStatus("completed");
