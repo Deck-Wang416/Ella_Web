@@ -275,41 +275,45 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="card p-5">
-        <p className="section-title">Highlight</p>
-        <div className="mt-4 grid gap-3">
-          {highlight.length > 0 ? (
-            highlight.map((item) => (
-              <div
-                key={item}
-                className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
-              >
-                {item}
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-ink-500">No highlights for this date.</p>
-          )}
-        </div>
-      </section>
+      {activeCondition === "robot" && (
+        <>
+          <section className="card p-5">
+            <p className="section-title">Highlight</p>
+            <div className="mt-4 grid gap-3">
+              {highlight.length > 0 ? (
+                highlight.map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
+                  >
+                    {item}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-ink-500">No highlights for this date.</p>
+              )}
+            </div>
+          </section>
 
-      <section className="card p-5">
-        <p className="section-title">Ask</p>
-        <div className="mt-4 grid gap-3">
-          {ask.length > 0 ? (
-            ask.map((item) => (
-              <div
-                key={item}
-                className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
-              >
-                {item}
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-ink-500">No suggested questions for this date.</p>
-          )}
-        </div>
-      </section>
+          <section className="card p-5">
+            <p className="section-title">Ask</p>
+            <div className="mt-4 grid gap-3">
+              {ask.length > 0 ? (
+                ask.map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
+                  >
+                    {item}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-ink-500">No suggested questions for this date.</p>
+              )}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
