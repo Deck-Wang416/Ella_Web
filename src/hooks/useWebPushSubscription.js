@@ -7,7 +7,7 @@ import {
 
 const PUBLIC_KEY = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY || "";
 
-export async function ensureWebPushSubscription() {
+export async function ensureWebPushSubscription(caregiverId) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     throw new Error("Web Push is not supported in this browser.");
   }
@@ -37,21 +37,22 @@ export async function ensureWebPushSubscription() {
     });
   }
 
-  const result = await upsertWebPushSubscription(subscription);
-  const verify = await getSubscriptionsByCaregiver(1);
+  const result = await upsertWebPushSubscription(subscription, caregiverId);
+  const verify = await getSubscriptionsByCaregiver(caregiverId);
 
   return { subscription, upsert: result, verify };
 }
 
-export function useWebPushSubscription() {
-  const startedRef = useRef(false);
+export function useWebPushSubscription(caregiverId) {
+  const startedForRef = useRef(null);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    if (!caregiverId) return;
+    if (startedForRef.current === caregiverId) return;
+    startedForRef.current = caregiverId;
 
-    ensureWebPushSubscription().catch((error) => {
+    ensureWebPushSubscription(caregiverId).catch((error) => {
       console.error("Web push subscription setup failed:", error);
     });
-  }, []);
+  }, [caregiverId]);
 }

@@ -1,11 +1,18 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { useCaregiver } from "../context/CaregiverContext.jsx";
+import { findAccount } from "../lib/auth.js";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { isAuthenticated, login } = useCaregiver();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen">
@@ -43,7 +50,9 @@ export default function Login() {
           <button
             type="button"
             onClick={() => {
-              if (username === "Deck" && password === "123456") {
+              const account = findAccount(username, password);
+              if (account) {
+                login(account);
                 setError("");
                 navigate("/dashboard");
                 return;

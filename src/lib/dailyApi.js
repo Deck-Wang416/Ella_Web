@@ -12,10 +12,11 @@ export class ApiError extends Error {
   }
 }
 
-function withTimezone(path) {
+function withDailyQuery(path, caregiverId) {
   const tz = encodeURIComponent(TIMEZONE);
+  const id = encodeURIComponent(caregiverId);
   const join = path.includes("?") ? "&" : "?";
-  return `${API_BASE}${path}${join}timezone=${tz}`;
+  return `${API_BASE}${path}${join}timezone=${tz}&caregiver_id=${id}`;
 }
 
 async function requestJson(url, options) {
@@ -37,19 +38,19 @@ async function requestJson(url, options) {
   return data;
 }
 
-export async function listDailySummaries() {
-  const data = await requestJson(withTimezone("/daily/summaries"));
+export async function listDailySummaries(caregiverId) {
+  const data = await requestJson(withDailyQuery("/daily/summaries", caregiverId));
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.items)) return data.items;
   return [];
 }
 
-export async function getDailyByDate(date) {
-  return requestJson(withTimezone(`/daily/${date}`));
+export async function getDailyByDate(date, caregiverId) {
+  return requestJson(withDailyQuery(`/daily/${date}`, caregiverId));
 }
 
-export async function updateDailyByDate(date, payload) {
-  return requestJson(withTimezone(`/daily/${date}`), {
+export async function updateDailyByDate(date, payload, caregiverId) {
+  return requestJson(withDailyQuery(`/daily/${date}`, caregiverId), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -58,8 +59,8 @@ export async function updateDailyByDate(date, payload) {
   });
 }
 
-export async function initializeDailyByDate(date, condition) {
-  return requestJson(withTimezone(`/daily/${date}/initialize`), {
+export async function initializeDailyByDate(date, condition, caregiverId) {
+  return requestJson(withDailyQuery(`/daily/${date}/initialize`, caregiverId), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -1,13 +1,12 @@
 import { getApiBase } from "./apiBase.js";
 
 const API_BASE = getApiBase();
-const SUBSCRIPTION_ID_KEY = "ella_web_push_subscription_id";
-const FIXED_CAREGIVER_ID = 1;
+const SUBSCRIPTION_ID_KEY_PREFIX = "ella_web_push_subscription_id";
 
-function toSubscriptionPayload(subscription) {
+function toSubscriptionPayload(subscription, caregiverId) {
   const json = subscription.toJSON();
   return {
-    caregiver_id: FIXED_CAREGIVER_ID,
+    caregiver_id: caregiverId,
     platform: "web_push",
     endpointOrToken: json.endpoint,
     keys: {
@@ -38,13 +37,17 @@ async function requestJson(url, options) {
   return { url, status: response.status, data };
 }
 
-function getStoredSubscriptionId() {
-  return localStorage.getItem(SUBSCRIPTION_ID_KEY);
+function getSubscriptionStorageKey(caregiverId) {
+  return `${SUBSCRIPTION_ID_KEY_PREFIX}_${caregiverId}`;
 }
 
-function setStoredSubscriptionId(id) {
+function getStoredSubscriptionId(caregiverId) {
+  return localStorage.getItem(getSubscriptionStorageKey(caregiverId));
+}
+
+function setStoredSubscriptionId(caregiverId, id) {
   if (!id) return;
-  localStorage.setItem(SUBSCRIPTION_ID_KEY, String(id));
+  localStorage.setItem(getSubscriptionStorageKey(caregiverId), String(id));
 }
 
 export function urlBase64ToUint8Array(base64String) {
@@ -58,9 +61,9 @@ export function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-export async function upsertWebPushSubscription(subscription) {
-  const payload = toSubscriptionPayload(subscription);
-  const storedId = getStoredSubscriptionId();
+export async function upsertWebPushSubscription(subscription, caregiverId) {
+  const payload = toSubscriptionPayload(subscription, caregiverId);
+  const storedId = getStoredSubscriptionId(caregiverId);
 
   if (storedId) {
     const putUrl = `${API_BASE}/subscriptions/${encodeURIComponent(storedId)}`;
@@ -70,7 +73,7 @@ export async function upsertWebPushSubscription(subscription) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      setStoredSubscriptionId(updated?.data?.id || storedId);
+      setStoredSubscriptionId(caregiverId, updated?.data?.id || storedId);
       return { ...updated, method: "PUT" };
     } catch (error) {
       console.error("[WebPush] PUT subscription failed:", {
@@ -79,7 +82,7 @@ export async function upsertWebPushSubscription(subscription) {
         response: error?.responseBody || null,
         message: error?.message,
       });
-      localStorage.removeItem(SUBSCRIPTION_ID_KEY);
+      localStorage.removeItem(getSubscriptionStorageKey(caregiverId));
       if (error?.status && error.status !== 404) {
         throw error;
       }
@@ -92,10 +95,10 @@ export async function upsertWebPushSubscription(subscription) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  setStoredSubscriptionId(created?.data?.id);
+  setStoredSubscriptionId(caregiverId, created?.data?.id);
   return { ...created, method: "POST" };
 }
 
-export async function getSubscriptionsByCaregiver(caregiverId = FIXED_CAREGIVER_ID) {
+export async function getSubscriptionsByCaregiver(caregiverId) {
   return requestJson(`${API_BASE}/subscriptions/${encodeURIComponent(caregiverId)}`);
 }

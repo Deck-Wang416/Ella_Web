@@ -8,8 +8,8 @@ function parseSlot(slot) {
   return { hour: h, minute: m };
 }
 
-function slotKey(date, slot) {
-  return `ella_reminder_sent_${date}_${slot}`;
+function slotKey(caregiverId, date, slot) {
+  return `ella_reminder_sent_${caregiverId}_${date}_${slot}`;
 }
 
 function nextSchedule(now) {
@@ -26,10 +26,10 @@ function nextSchedule(now) {
   return candidates[0];
 }
 
-async function isTodaySubmitted() {
+async function isTodaySubmitted(caregiverId) {
   const today = formatTodayDate();
   try {
-    const json = await getDailyByDate(today);
+    const json = await getDailyByDate(today, caregiverId);
     return Boolean(json?.diary?.submitted);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return false;
@@ -37,14 +37,14 @@ async function isTodaySubmitted() {
   }
 }
 
-async function showReminder(slot) {
+async function showReminder(slot, caregiverId) {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
 
   const today = formatTodayDate();
-  if (localStorage.getItem(slotKey(today, slot)) === '1') return;
+  if (localStorage.getItem(slotKey(caregiverId, today, slot)) === '1') return;
 
-  const submitted = await isTodaySubmitted();
+  const submitted = await isTodaySubmitted(caregiverId);
   if (submitted) return;
 
   const registration = await navigator.serviceWorker?.ready;
@@ -62,17 +62,18 @@ async function showReminder(slot) {
     new Notification(title, { body });
   }
 
-  localStorage.setItem(slotKey(today, slot), '1');
+  localStorage.setItem(slotKey(caregiverId, today, slot), '1');
 }
 
-export function useDiaryReminder(enabled = true) {
+export function useDiaryReminder(caregiverId, enabled = true) {
   const timerRef = useRef(null);
-  const startedRef = useRef(false);
+  const startedForRef = useRef(null);
 
   useEffect(() => {
     if (!enabled) return;
-    if (startedRef.current) return;
-    startedRef.current = true;
+    if (!caregiverId) return;
+    if (startedForRef.current === caregiverId) return;
+    startedForRef.current = caregiverId;
 
     if (!('Notification' in window)) return;
 
@@ -92,7 +93,7 @@ export function useDiaryReminder(enabled = true) {
       const delay = Math.max(0, next.time.getTime() - now.getTime());
 
       timerRef.current = window.setTimeout(async () => {
-        await showReminder(next.slot);
+        await showReminder(next.slot, caregiverId);
         schedule();
       }, delay);
     }
@@ -104,5 +105,5 @@ export function useDiaryReminder(enabled = true) {
         clearTimeout(timerRef.current);
       }
     };
-  }, []);
+  }, [caregiverId, enabled]);
 }

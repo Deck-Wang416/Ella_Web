@@ -28,7 +28,12 @@ function delay(ms) {
   });
 }
 
-export default function ParentAudioRecorder({ date, enabled = false, onRecorderBusyChange }) {
+export default function ParentAudioRecorder({
+  caregiverId,
+  date,
+  enabled = false,
+  onRecorderBusyChange,
+}) {
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [sessionId, setSessionId] = useState(null);
@@ -231,7 +236,7 @@ export default function ParentAudioRecorder({ date, enabled = false, onRecorderB
   async function ensureSession() {
     if (sessionIdRef.current) return sessionIdRef.current;
 
-    const created = await createRecordingSession(date);
+    const created = await createRecordingSession(date, caregiverId);
     setCompletedDate(null);
     sessionIdRef.current = created.sessionId;
     lastUploadedChunkIndexRef.current = created.lastChunkIndex ?? -1;

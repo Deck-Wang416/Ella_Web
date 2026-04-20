@@ -2,7 +2,6 @@ import { getApiBase } from "./apiBase.js";
 import { ApiError } from "./dailyApi.js";
 
 const API_BASE = getApiBase();
-const CAREGIVER_ID = 1;
 const CHILD_ID = 1;
 
 async function requestJson(url, options) {
@@ -25,7 +24,7 @@ async function requestJson(url, options) {
   return data;
 }
 
-export async function createRecordingSession(date) {
+export async function createRecordingSession(date, caregiverId) {
   return requestJson(`${API_BASE}/recordings/sessions`, {
     method: "POST",
     headers: {
@@ -33,7 +32,7 @@ export async function createRecordingSession(date) {
     },
     body: JSON.stringify({
       date,
-      caregiverId: CAREGIVER_ID,
+      caregiverId,
       childId: CHILD_ID,
     }),
   });

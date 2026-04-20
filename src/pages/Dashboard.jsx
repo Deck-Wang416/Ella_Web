@@ -6,12 +6,13 @@ import {
   getDailyByDate,
   initializeDailyByDate,
   listDailySummaries,
-  nearestDate,
   ApiError,
 } from "../lib/dailyApi.js";
 import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
+import { useCaregiver } from "../context/CaregiverContext.jsx";
 
 export default function Dashboard() {
+  const { caregiverId } = useCaregiver();
   const [summaries, setSummaries] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [dailyData, setDailyData] = useState(null);
@@ -40,7 +41,7 @@ export default function Dashboard() {
     async function init() {
       setLoadingSummaries(true);
       try {
-        const list = await listDailySummaries();
+        const list = await listDailySummaries(caregiverId);
         if (cancelled) return;
         setSummaries(list);
         setSelectedDate(today);
@@ -57,7 +58,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [today]);
+  }, [caregiverId, today]);
 
   useEffect(() => {
     if (!selectedDate) {
@@ -70,7 +71,7 @@ export default function Dashboard() {
     async function load() {
       setLoadingDaily(true);
       try {
-        const json = await getDailyByDate(selectedDate);
+        const json = await getDailyByDate(selectedDate, caregiverId);
         if (cancelled) return;
         setDailyData(json);
         setPhotoIndex(0);
@@ -102,7 +103,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDate, today]);
+  }, [caregiverId, selectedDate, today]);
 
   const activeCondition = dailyData?.condition || "robot";
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
@@ -123,7 +124,7 @@ export default function Dashboard() {
 
     try {
       setLoadingDaily(true);
-      const json = await getDailyByDate(selectedDate);
+      const json = await getDailyByDate(selectedDate, caregiverId);
       setDailyData(json);
       setErrorText("");
     } catch (error) {
@@ -143,9 +144,9 @@ export default function Dashboard() {
     setInitErrorText("");
 
     try {
-      await initializeDailyByDate(selectedDate, condition);
-      const latest = await getDailyByDate(selectedDate);
-      const summaryList = await listDailySummaries();
+      await initializeDailyByDate(selectedDate, condition, caregiverId);
+      const latest = await getDailyByDate(selectedDate, caregiverId);
+      const summaryList = await listDailySummaries(caregiverId);
       setSummaries(summaryList);
       setDailyData(latest);
       setPhotoIndex(0);
@@ -207,6 +208,7 @@ export default function Dashboard() {
 
       {activeCondition === "parent" ? (
         <ParentAudioRecorder
+          caregiverId={caregiverId}
           date={selectedDate}
           enabled
           onRecorderBusyChange={setRecorderBusy}

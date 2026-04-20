@@ -3,31 +3,45 @@ import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import ParentDiary from "./pages/ParentDiary.jsx";
 import AppLayout from "./components/AppLayout.jsx";
+import { CaregiverProvider } from "./context/CaregiverContext.jsx";
+import { useCaregiver } from "./context/CaregiverContext.jsx";
+
+function ProtectedRoute({ children }) {
+  const { isAuthenticated } = useCaregiver();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return children;
+}
 
 export default function App() {
   return (
-    <div className="app-shell">
-      <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/dashboard"
-          element={
-            <AppLayout active="dashboard">
-              <Dashboard />
-            </AppLayout>
-          }
-        />
-        <Route
-          path="/parent-diary"
-          element={
-            <AppLayout active="parent-diary">
-              <ParentDiary />
-            </AppLayout>
-          }
-        />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </div>
+    <CaregiverProvider>
+      <div className="app-shell">
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <AppLayout active="dashboard">
+                  <Dashboard />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parent-diary"
+            element={
+              <ProtectedRoute>
+                <AppLayout active="parent-diary">
+                  <ParentDiary />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </div>
+    </CaregiverProvider>
   );
 }

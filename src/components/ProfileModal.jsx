@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import profileData from "../data/profile.json";
 import { ensureWebPushSubscription } from "../hooks/useWebPushSubscription.js";
 
-export default function ProfileModal({ open, onClose }) {
+export default function ProfileModal({ caregiverId, open, onClose }) {
   const [themes, setThemes] = useState(profileData.themes);
   const [newTheme, setNewTheme] = useState("");
   const [subscribing, setSubscribing] = useState(false);
@@ -97,7 +97,7 @@ export default function ProfileModal({ open, onClose }) {
                   setSubscribing(true);
                   setSubscriptionMessage("");
                   try {
-                    await ensureWebPushSubscription();
+                    await ensureWebPushSubscription(caregiverId);
                     setSubscriptionMessage("Notifications enabled.");
                   } catch (error) {
                     setSubscriptionMessage(error?.message || "Failed to enable notifications.");

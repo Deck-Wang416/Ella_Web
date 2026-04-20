@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-export default function Header({ active, onOpenProfile }) {
+export default function Header({ active, caregiverId, username, onLogout, onOpenProfile }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [wiggle, setWiggle] = useState(false);
   const navigate = useNavigate();
@@ -23,7 +23,11 @@ export default function Header({ active, onOpenProfile }) {
           />
           <p className="text-lg uppercase tracking-[0.4em] text-ink-500">ELLA</p>
         </div>
-        <div className="relative">
+        <div className="flex items-center gap-3">
+          <div className="rounded-full border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm">
+            {username} · Caregiver {caregiverId}
+          </div>
+          <div className="relative">
           <button
             type="button"
             onClick={() => {
@@ -71,6 +75,7 @@ export default function Header({ active, onOpenProfile }) {
                     if (!confirmed) return;
                   }
                   setMenuOpen(false);
+                  onLogout();
                   navigate("/login");
                 }}
                 className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-ink-700 transition hover:bg-ink-100"
@@ -79,6 +84,7 @@ export default function Header({ active, onOpenProfile }) {
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
       <nav className="mx-auto flex w-full max-w-4xl gap-4 px-5 pb-4">

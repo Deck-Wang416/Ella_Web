@@ -11,8 +11,10 @@ import {
   nearestDate,
   updateDailyByDate,
 } from "../lib/dailyApi.js";
+import { useCaregiver } from "../context/CaregiverContext.jsx";
 
 export default function ParentDiary() {
+  const { caregiverId } = useCaregiver();
   const [summaries, setSummaries] = useState([]);
   const [summariesLoaded, setSummariesLoaded] = useState(false);
   const [diaryDate, setDiaryDate] = useState(null);
@@ -33,7 +35,7 @@ export default function ParentDiary() {
 
     async function init() {
       try {
-        const list = await listDailySummaries();
+        const list = await listDailySummaries(caregiverId);
         if (cancelled) return;
 
         setSummaries(list);
@@ -56,7 +58,7 @@ export default function ParentDiary() {
     return () => {
       cancelled = true;
     };
-  }, [today]);
+  }, [caregiverId, today]);
 
   useEffect(() => {
     if (!summariesLoaded) {
@@ -81,7 +83,7 @@ export default function ParentDiary() {
       setErrorText("");
 
       try {
-        const json = await getDailyByDate(diaryDate);
+        const json = await getDailyByDate(diaryDate, caregiverId);
         if (cancelled) return;
 
         const initialResponses = json.diary?.responses || {};
@@ -129,7 +131,7 @@ export default function ParentDiary() {
     return () => {
       cancelled = true;
     };
-  }, [diaryDate, summariesLoaded]);
+  }, [caregiverId, diaryDate, summariesLoaded]);
 
   const selectedSummary = useMemo(
     () => summaries.find((item) => item.date === diaryDate) || null,
@@ -219,7 +221,7 @@ export default function ParentDiary() {
     });
 
   async function refreshSummaries() {
-    const latest = await listDailySummaries();
+    const latest = await listDailySummaries(caregiverId);
     setSummaries(latest);
   }
 
@@ -229,9 +231,9 @@ export default function ParentDiary() {
     setInitErrorText("");
 
     try {
-      await initializeDailyByDate(diaryDate, condition);
-      const latest = await getDailyByDate(diaryDate);
-      const summaryList = await listDailySummaries();
+      await initializeDailyByDate(diaryDate, condition, caregiverId);
+      const latest = await getDailyByDate(diaryDate, caregiverId);
+      const summaryList = await listDailySummaries(caregiverId);
       const initialResponses = latest.diary?.responses || {};
       const sanitized = sanitizeResponses(initialResponses, latest.diary?.questions || []);
 
@@ -263,7 +265,7 @@ export default function ParentDiary() {
         submitted: true,
       };
 
-      const updated = await updateDailyByDate(diaryDate, payload);
+      const updated = await updateDailyByDate(diaryDate, payload, caregiverId);
       const nextResponses = sanitizeResponses(
         updated?.diary?.responses || {},
         updated?.diary?.questions || []
