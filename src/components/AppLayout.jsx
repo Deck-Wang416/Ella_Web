@@ -23,7 +23,7 @@ export default function AppLayout({ active, children }) {
       <main className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6">
         {children}
       </main>
-      <ProfileModal caregiverId={caregiverId} open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

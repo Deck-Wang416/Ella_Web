@@ -25,7 +25,7 @@ export default function Header({ active, caregiverId, username, onLogout, onOpen
         </div>
         <div className="flex items-center gap-3">
           <div className="rounded-full border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 shadow-sm">
-            {username} · Caregiver {caregiverId}
+            {username}
           </div>
           <div className="relative">
           <button

@@ -1,6 +1,6 @@
 {
   "childPhoto": "/assets/child-photo.svg",
-  "childName": "Deck",
-  "dayProgress": "6 out of 30",
+  "childName": "Child",
+  "dayProgress": "Day progress",
   "themes": ["Friendship", "Food", "Colors", "Sharing"]
 }
