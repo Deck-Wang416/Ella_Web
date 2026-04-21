@@ -50,6 +50,10 @@ function setStoredSubscriptionId(caregiverId, id) {
   localStorage.setItem(getSubscriptionStorageKey(caregiverId), String(id));
 }
 
+function clearStoredSubscriptionId(caregiverId) {
+  localStorage.removeItem(getSubscriptionStorageKey(caregiverId));
+}
+
 export function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -101,4 +105,17 @@ export async function upsertWebPushSubscription(subscription, caregiverId) {
 
 export async function getSubscriptionsByCaregiver(caregiverId) {
   return requestJson(`${API_BASE}/subscriptions/${encodeURIComponent(caregiverId)}`);
+}
+
+export async function deactivateStoredSubscription(caregiverId) {
+  const storedId = getStoredSubscriptionId(caregiverId);
+  if (!storedId) return null;
+
+  try {
+    return await requestJson(`${API_BASE}/subscriptions/${encodeURIComponent(storedId)}`, {
+      method: "DELETE",
+    });
+  } finally {
+    clearStoredSubscriptionId(caregiverId);
+  }
 }

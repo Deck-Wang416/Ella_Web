@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-export default function Header({ active, caregiverId, username, onLogout, onOpenProfile }) {
+export default function Header({ active, username, onLogout, onOpenProfile }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [wiggle, setWiggle] = useState(false);
   const navigate = useNavigate();
@@ -67,7 +67,7 @@ export default function Header({ active, caregiverId, username, onLogout, onOpen
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (window.__ellaDiaryDirty) {
                     const confirmed = window.confirm(
                       "You have unsaved changes. If you leave now, new changes will be lost."
@@ -75,7 +75,7 @@ export default function Header({ active, caregiverId, username, onLogout, onOpen
                     if (!confirmed) return;
                   }
                   setMenuOpen(false);
-                  onLogout();
+                  await onLogout();
                   navigate("/login");
                 }}
                 className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-ink-700 transition hover:bg-ink-100"
