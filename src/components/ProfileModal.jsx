@@ -1,11 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import profileData from "../data/profile.json";
 
 export default function ProfileModal({ open, onClose }) {
-  const [themes, setThemes] = useState(profileData.themes);
-  const [newTheme, setNewTheme] = useState("");
-
-  const canAdd = useMemo(() => newTheme.trim().length > 0, [newTheme]);
+  const [themes] = useState(profileData.themes);
 
   if (!open) return null;
 
@@ -37,7 +34,7 @@ export default function ProfileModal({ open, onClose }) {
           <div>
             <div className="flex items-center justify-between">
               <p className="section-title">Themes</p>
-              <span className="text-xs text-ink-500">Editable</span>
+              <span className="text-xs text-ink-500">Read only</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {themes.map((theme) => (
@@ -48,12 +45,8 @@ export default function ProfileModal({ open, onClose }) {
                   {theme}
                   <button
                     type="button"
-                    onClick={() => {
-                      const confirmed = window.confirm(`Remove theme "${theme}"?`);
-                      if (!confirmed) return;
-                      setThemes((prev) => prev.filter((item) => item !== theme));
-                    }}
-                    className="text-ink-500 hover:text-brand-600"
+                    disabled
+                    className="cursor-not-allowed text-ink-300"
                     aria-label={`Remove ${theme}`}
                   >
                     −
@@ -63,20 +56,15 @@ export default function ProfileModal({ open, onClose }) {
             </div>
             <div className="mt-4 flex gap-2">
               <input
-                value={newTheme}
-                onChange={(event) => setNewTheme(event.target.value)}
+                value=""
+                readOnly
                 className="input flex-1"
-                placeholder="Add a theme"
+                placeholder="Editing disabled"
               />
               <button
                 type="button"
-                onClick={() => {
-                  if (!canAdd) return;
-                  setThemes((prev) => [...prev, newTheme.trim()]);
-                  setNewTheme("");
-                }}
-                className={`btn-primary ${!canAdd ? "opacity-50" : ""}`}
-                disabled={!canAdd}
+                className="btn-primary opacity-50"
+                disabled
               >
                 +
               </button>
