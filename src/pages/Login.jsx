@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { findAccount } from "../lib/auth.js";
+import { deactivateOtherStoredSubscriptions } from "../lib/webPushApi.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -49,15 +50,21 @@ export default function Login() {
           {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               const account = findAccount(username, password);
-              if (account) {
+              if (!account) {
+                setError("Invalid username or password.");
+                return;
+              }
+
+              try {
+                await deactivateOtherStoredSubscriptions(account.caregiverId);
                 login(account);
                 setError("");
                 navigate("/dashboard");
-                return;
+              } catch {
+                setError("Unable to switch notification binding. Please try again.");
               }
-              setError("Invalid username or password.");
             }}
             className="btn-primary mt-6 w-full"
           >

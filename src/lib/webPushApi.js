@@ -54,6 +54,19 @@ function clearStoredSubscriptionId(caregiverId) {
   localStorage.removeItem(getSubscriptionStorageKey(caregiverId));
 }
 
+function getAllStoredSubscriptionIds() {
+  return Object.keys(localStorage)
+    .filter((key) => key.startsWith(`${SUBSCRIPTION_ID_KEY_PREFIX}_`))
+    .map((key) => {
+      const caregiverId = Number(key.replace(`${SUBSCRIPTION_ID_KEY_PREFIX}_`, ""));
+      const subscriptionId = localStorage.getItem(key);
+      return Number.isFinite(caregiverId) && subscriptionId
+        ? { caregiverId, subscriptionId }
+        : null;
+    })
+    .filter(Boolean);
+}
+
 export function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -118,4 +131,19 @@ export async function deactivateStoredSubscription(caregiverId) {
   } finally {
     clearStoredSubscriptionId(caregiverId);
   }
+}
+
+export async function deactivateOtherStoredSubscriptions(activeCaregiverId) {
+  const entries = getAllStoredSubscriptionIds().filter(
+    ({ caregiverId }) => caregiverId !== activeCaregiverId
+  );
+
+  for (const entry of entries) {
+    await requestJson(`${API_BASE}/subscriptions/${encodeURIComponent(entry.subscriptionId)}`, {
+      method: "DELETE",
+    });
+    clearStoredSubscriptionId(entry.caregiverId);
+  }
+
+  return entries.length;
 }
