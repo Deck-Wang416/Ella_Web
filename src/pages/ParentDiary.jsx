@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useBeforeUnload } from "react-router-dom";
-import DailyConditionInitModal from "../components/DailyConditionInitModal.jsx";
 import DatePicker from "../components/DatePicker.jsx";
 import {
   ApiError,
   formatTodayDate,
   getDailyByDate,
-  initializeDailyByDate,
   listDailySummaries,
   nearestDate,
   updateDailyByDate,
 } from "../lib/dailyApi.js";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
+import { useProfile } from "../context/ProfileContext.jsx";
+import ExperimentBlockedState from "../components/ExperimentBlockedState.jsx";
 
 export default function ParentDiary() {
   const { caregiverId } = useCaregiver();
+  const { loadingProfile, profileError, profileStatus } = useProfile();
   const [summaries, setSummaries] = useState([]);
   const [summariesLoaded, setSummariesLoaded] = useState(false);
   const [diaryDate, setDiaryDate] = useState(null);
@@ -25,12 +26,23 @@ export default function ParentDiary() {
   const [saving, setSaving] = useState(false);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [errorText, setErrorText] = useState("");
-  const [initModalOpen, setInitModalOpen] = useState(false);
-  const [initErrorText, setInitErrorText] = useState("");
-  const [initializingDaily, setInitializingDaily] = useState(false);
   const today = formatTodayDate();
+  const isActivePeriod =
+    profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active";
 
   useEffect(() => {
+    if (!isActivePeriod) {
+      setSummaries([]);
+      setSummariesLoaded(true);
+      setDiaryDate(today);
+      setDailyData(null);
+      setFormValues({});
+      setSavedValues({});
+      setLoadingDaily(false);
+      setErrorText("");
+      return;
+    }
+
     let cancelled = false;
 
     async function init() {
@@ -58,9 +70,17 @@ export default function ParentDiary() {
     return () => {
       cancelled = true;
     };
-  }, [caregiverId, today]);
+  }, [caregiverId, isActivePeriod, today]);
 
   useEffect(() => {
+    if (!isActivePeriod) {
+      setLoadingDaily(false);
+      setDailyData(null);
+      setFormValues({});
+      setSavedValues({});
+      return;
+    }
+
     if (!summariesLoaded) {
       setLoadingDaily(true);
       setDailyData(null);
@@ -100,13 +120,7 @@ export default function ParentDiary() {
 
         if (error instanceof ApiError) {
           if (error.status === 404) {
-            if (diaryDate === today) {
-              setInitModalOpen(true);
-              setInitErrorText("");
-              setErrorText("");
-            } else {
-              setErrorText("No diary record for this date.");
-            }
+            setErrorText("No diary record for this date.");
           } else if (error.status === 409) {
             setErrorText("Only today is editable.");
           } else if (error.status === 400) {
@@ -131,7 +145,7 @@ export default function ParentDiary() {
     return () => {
       cancelled = true;
     };
-  }, [caregiverId, diaryDate, summariesLoaded]);
+  }, [caregiverId, diaryDate, isActivePeriod, summariesLoaded]);
 
   const selectedSummary = useMemo(
     () => summaries.find((item) => item.date === diaryDate) || null,
@@ -225,35 +239,6 @@ export default function ParentDiary() {
     setSummaries(latest);
   }
 
-  async function initializeDaily(condition) {
-    if (!diaryDate) return;
-    setInitializingDaily(true);
-    setInitErrorText("");
-
-    try {
-      await initializeDailyByDate(diaryDate, condition, caregiverId);
-      const latest = await getDailyByDate(diaryDate, caregiverId);
-      const summaryList = await listDailySummaries(caregiverId);
-      const initialResponses = latest.diary?.responses || {};
-      const sanitized = sanitizeResponses(initialResponses, latest.diary?.questions || []);
-
-      setSummaries(summaryList);
-      setDailyData(latest);
-      setFormValues(sanitized);
-      setSavedValues(sanitized);
-      setInitModalOpen(false);
-      setErrorText("");
-    } catch (error) {
-      if (error instanceof ApiError && error.status >= 500) {
-        setInitErrorText("Service is temporarily unavailable. Please try again later.");
-      } else {
-        setInitErrorText("Unable to initialize daily record. Please try again.");
-      }
-    } finally {
-      setInitializingDaily(false);
-    }
-  }
-
   async function saveDiary() {
     if (!dailyData || !diaryDate || !canSubmit || saving) return;
     setSaving(true);
@@ -300,6 +285,35 @@ export default function ParentDiary() {
     }
   }
 
+  if (loadingProfile) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-[1px]">
+        <div className="rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+          Loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <section className="card p-5 text-sm text-red-600">
+        Service is temporarily unavailable. Please try again later.
+      </section>
+    );
+  }
+
+  if (!isActivePeriod) {
+    return (
+      <ExperimentBlockedState
+        title={profileStatus?.title || "Your testing has not begun yet."}
+        description={
+          profileStatus?.description || "Please come back when your assigned testing period begins."
+        }
+      />
+    );
+  }
+
   return (
     <div className="relative grid gap-6">
       {showToast && (
@@ -307,15 +321,6 @@ export default function ParentDiary() {
           Saved successfully.
         </div>
       )}
-
-      <DailyConditionInitModal
-        open={initModalOpen}
-        date={diaryDate}
-        loading={initializingDaily}
-        errorText={initErrorText}
-        onClose={() => setInitModalOpen(false)}
-        onSelect={initializeDaily}
-      />
 
       <section>
         <DatePicker

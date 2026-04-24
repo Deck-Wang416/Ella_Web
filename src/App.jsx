@@ -5,6 +5,7 @@ import ParentDiary from "./pages/ParentDiary.jsx";
 import AppLayout from "./components/AppLayout.jsx";
 import { CaregiverProvider } from "./context/CaregiverContext.jsx";
 import { useCaregiver } from "./context/CaregiverContext.jsx";
+import { ProfileProvider } from "./context/ProfileContext.jsx";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useCaregiver();
@@ -15,33 +16,35 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <CaregiverProvider>
-      <div className="app-shell">
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <AppLayout active="dashboard">
-                  <Dashboard />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/parent-diary"
-            element={
-              <ProtectedRoute>
-                <AppLayout active="parent-diary">
-                  <ParentDiary />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </div>
+      <ProfileProvider>
+        <div className="app-shell">
+          <Routes>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <AppLayout active="dashboard">
+                    <Dashboard />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/parent-diary"
+              element={
+                <ProtectedRoute>
+                  <AppLayout active="parent-diary">
+                    <ParentDiary />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </div>
+      </ProfileProvider>
     </CaregiverProvider>
   );
 }

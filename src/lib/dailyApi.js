@@ -59,16 +59,6 @@ export async function updateDailyByDate(date, payload, caregiverId) {
   });
 }
 
-export async function initializeDailyByDate(date, condition, caregiverId) {
-  return requestJson(withDailyQuery(`/daily/${date}/initialize`, caregiverId), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ condition }),
-  });
-}
-
 export function formatTodayDate() {
   const today = new Date();
   const year = today.getFullYear();

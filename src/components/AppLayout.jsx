@@ -5,11 +5,17 @@ import { useDiaryReminder } from "../hooks/useDiaryReminder.js";
 import { useWebPushSubscription } from "../hooks/useWebPushSubscription.js";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { deactivateStoredSubscription } from "../lib/webPushApi.js";
+import { useProfile } from "../context/ProfileContext.jsx";
 
 export default function AppLayout({ active, children }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const { caregiverId, username, logout } = useCaregiver();
-  useDiaryReminder(caregiverId, import.meta.env.VITE_ENABLE_LOCAL_REMINDER === "true");
+  const { loadingProfile, profileStatus } = useProfile();
+  const reminderEnabled =
+    import.meta.env.VITE_ENABLE_LOCAL_REMINDER === "true" &&
+    !loadingProfile &&
+    (profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active");
+  useDiaryReminder(caregiverId, reminderEnabled);
   useWebPushSubscription(caregiverId);
 
   async function handleLogout() {

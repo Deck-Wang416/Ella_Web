@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import DailyConditionInitModal from "../components/DailyConditionInitModal.jsx";
 import DatePicker from "../components/DatePicker.jsx";
 import {
   formatTodayDate,
   getDailyByDate,
-  initializeDailyByDate,
   listDailySummaries,
   ApiError,
 } from "../lib/dailyApi.js";
 import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
+import { useProfile } from "../context/ProfileContext.jsx";
+import ExperimentBlockedState from "../components/ExperimentBlockedState.jsx";
 
 export default function Dashboard() {
   const { caregiverId } = useCaregiver();
+  const { loadingProfile, profileError, profileStatus } = useProfile();
   const [summaries, setSummaries] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [dailyData, setDailyData] = useState(null);
@@ -21,21 +22,31 @@ export default function Dashboard() {
   const [loadingSummaries, setLoadingSummaries] = useState(true);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [recorderBusy, setRecorderBusy] = useState(false);
-  const [initModalOpen, setInitModalOpen] = useState(false);
-  const [initErrorText, setInitErrorText] = useState("");
-  const [initializingDaily, setInitializingDaily] = useState(false);
   const today = formatTodayDate();
+  const isActivePeriod =
+    profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active";
 
   const availableDates = useMemo(
-    () =>
+    () => (
       [...new Set([
         ...summaries.filter((item) => item.dashboardSelectable).map((item) => item.date),
         today,
-      ])],
+      ])]
+    ),
     [summaries, today]
   );
 
   useEffect(() => {
+    if (!isActivePeriod) {
+      setSummaries([]);
+      setSelectedDate(today);
+      setDailyData(null);
+      setLoadingSummaries(false);
+      setLoadingDaily(false);
+      setErrorText("");
+      return;
+    }
+
     let cancelled = false;
 
     async function init() {
@@ -58,9 +69,15 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [caregiverId, today]);
+  }, [caregiverId, isActivePeriod, today]);
 
   useEffect(() => {
+    if (!isActivePeriod) {
+      setDailyData(null);
+      setLoadingDaily(false);
+      return;
+    }
+
     if (!selectedDate) {
       setDailyData(null);
       setLoadingDaily(false);
@@ -80,12 +97,6 @@ export default function Dashboard() {
         if (cancelled) return;
         setDailyData(null);
         if (error instanceof ApiError && error.status === 404) {
-          if (selectedDate === today) {
-            setInitModalOpen(true);
-            setInitErrorText("");
-            setErrorText("");
-            return;
-          }
           setErrorText("No dashboard record for this date.");
           return;
         }
@@ -103,7 +114,7 @@ export default function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [caregiverId, selectedDate, today]);
+  }, [caregiverId, isActivePeriod, selectedDate]);
 
   const activeCondition = dailyData?.condition || "robot";
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
@@ -119,53 +130,38 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, [photos.length]);
 
-  async function refreshDailyData() {
-    if (!selectedDate) return;
-
-    try {
-      setLoadingDaily(true);
-      const json = await getDailyByDate(selectedDate, caregiverId);
-      setDailyData(json);
-      setErrorText("");
-    } catch (error) {
-      if (error instanceof ApiError && error.status >= 500) {
-        setErrorText("Service is temporarily unavailable. Please try again later.");
-        return;
-      }
-      setErrorText("Failed to load dashboard data.");
-    } finally {
-      setLoadingDaily(false);
-    }
-  }
-
-  async function initializeDaily(condition) {
-    if (!selectedDate) return;
-    setInitializingDaily(true);
-    setInitErrorText("");
-
-    try {
-      await initializeDailyByDate(selectedDate, condition, caregiverId);
-      const latest = await getDailyByDate(selectedDate, caregiverId);
-      const summaryList = await listDailySummaries(caregiverId);
-      setSummaries(summaryList);
-      setDailyData(latest);
-      setPhotoIndex(0);
-      setInitModalOpen(false);
-      setErrorText("");
-    } catch (error) {
-      if (error instanceof ApiError && error.status >= 500) {
-        setInitErrorText("Service is temporarily unavailable. Please try again later.");
-      } else {
-        setInitErrorText("Unable to initialize daily record. Please try again.");
-      }
-    } finally {
-      setInitializingDaily(false);
-    }
-  }
-
   function confirmRecorderLeave(message) {
     if (!recorderBusy) return true;
     return window.confirm(message);
+  }
+
+  if (loadingProfile) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-[1px]">
+        <div className="rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+          Loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <section className="card p-5 text-sm text-red-600">
+        Service is temporarily unavailable. Please try again later.
+      </section>
+    );
+  }
+
+  if (!isActivePeriod) {
+    return (
+      <ExperimentBlockedState
+        title={profileStatus?.title || "Your testing has not begun yet."}
+        description={
+          profileStatus?.description || "Please come back when your assigned testing period begins."
+        }
+      />
+    );
   }
 
   return (
@@ -177,15 +173,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      <DailyConditionInitModal
-        open={initModalOpen}
-        date={selectedDate}
-        loading={initializingDaily}
-        errorText={initErrorText}
-        onClose={() => setInitModalOpen(false)}
-        onSelect={initializeDaily}
-      />
 
       <section>
         <DatePicker
