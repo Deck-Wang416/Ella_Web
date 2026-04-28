@@ -226,10 +226,14 @@ export default function ParentDiary() {
 
   const questions = dailyData?.diary?.questions || [];
   const instructions = dailyData?.diary?.instructions || [];
+  const visibleQuestions = useMemo(
+    () => questions.filter((question) => shouldShowQuestion(question, formValues)),
+    [formValues, questions]
+  );
 
   const canSubmit =
     isEditable &&
-    Object.values(formValues).some((value) => {
+    Object.values(sanitizeResponses(formValues, questions)).some((value) => {
       if (Array.isArray(value)) return value.length > 0;
       return String(value || "").trim().length > 0;
     });
@@ -378,7 +382,7 @@ export default function ParentDiary() {
 
         <form className="card p-6" onSubmit={(event) => event.preventDefault()}>
           <div className="grid gap-8">
-            {questions.map((question, index) => (
+            {visibleQuestions.map((question, index) => (
               <QuestionBlock
                 key={question.id}
                 question={question}
@@ -387,18 +391,13 @@ export default function ParentDiary() {
                 followupValues={formValues}
                 onChange={(nextValue) =>
                   setFormValues((prev) => {
-                    const next = { ...prev, [question.id]: nextValue };
-                    const visibleKeys = new Set(getVisibleFollowupKeys(question, nextValue));
-                    getAllFollowupKeys(question).forEach((followupKey) => {
-                      if (!visibleKeys.has(followupKey) && followupKey in next) {
-                        delete next[followupKey];
-                      }
-                    });
-                    return next;
+                    return sanitizeResponses({ ...prev, [question.id]: nextValue }, questions);
                   })
                 }
                 onFollowupChange={(responseKey, nextValue) =>
-                  setFormValues((prev) => ({ ...prev, [responseKey]: nextValue }))
+                  setFormValues((prev) =>
+                    sanitizeResponses({ ...prev, [responseKey]: nextValue }, questions)
+                  )
                 }
                 disabled={!isEditable || loadingDaily}
               />
@@ -424,8 +423,15 @@ function sanitizeResponses(responses, questions) {
   const next = { ...(responses || {}) };
 
   questions.forEach((question) => {
-    const answer = next[question.id];
-    const visibleKeys = new Set(getVisibleFollowupKeys(question, answer));
+    if (!shouldShowQuestion(question, next)) {
+      delete next[question.id];
+      getAllFollowupKeys(question).forEach((followupKey) => {
+        delete next[followupKey];
+      });
+      return;
+    }
+
+    const visibleKeys = new Set(getVisibleFollowupKeys(question, next));
     getAllFollowupKeys(question).forEach((followupKey) => {
       if (!visibleKeys.has(followupKey)) {
         delete next[followupKey];
@@ -455,7 +461,7 @@ function QuestionBlock({
   };
 
   const visibleFollowups = getFollowups(question).filter((followup) =>
-    shouldShowFollowup(followup, value)
+    shouldShowFollowup(question, followupValues, followup)
   );
 
   return (
@@ -542,21 +548,42 @@ function getAllFollowupKeys(question) {
   );
 }
 
-function getVisibleFollowupKeys(question, answer) {
+function getVisibleFollowupKeys(question, responses) {
   return getFollowups(question)
-    .filter((followup) => shouldShowFollowup(followup, answer))
+    .filter((followup) => shouldShowFollowup(question, responses, followup))
     .map(
       (followup, index) =>
         followup.responseKey || `${question.id}_followup${index === 0 ? "" : `_${index + 1}`}`
     );
 }
 
-function shouldShowFollowup(followup, answer) {
-  if (!followup || !followup.showWhen) return false;
+function shouldShowQuestion(question, responses) {
+  if (!question?.showWhen) return true;
+  return evaluateShowWhen(question.showWhen, responses);
+}
 
-  const { operator, value } = followup.showWhen;
+function shouldShowFollowup(question, responses, followup) {
+  if (!followup?.showWhen) return false;
+  return evaluateShowWhen(followup.showWhen, responses, question.id);
+}
+
+function evaluateShowWhen(showWhen, responses, defaultSourceQuestionId = null) {
+  if (!showWhen) return false;
+
+  const sourceQuestionId =
+    showWhen.sourceQuestionId || showWhen.questionId || showWhen.targetQuestionId || defaultSourceQuestionId;
+  if (!sourceQuestionId) return false;
+
+  const answer = responses?.[sourceQuestionId];
+  const { operator, value } = showWhen;
+
   if (operator === "equals") {
     return answer === value;
+  }
+
+  if (operator === "equalsAny") {
+    if (!Array.isArray(value)) return false;
+    return value.includes(answer);
   }
 
   if (operator === "includesAny") {
