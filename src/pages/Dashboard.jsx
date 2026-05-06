@@ -205,7 +205,7 @@ export default function Dashboard() {
           <section className="card p-5">
             <p className="section-title">Book for today</p>
             <div className="mt-4">
-              <div className="inline-flex rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
+              <div className="inline-flex rounded-full border border-ink-200 bg-ink-100 px-3 py-1 text-sm">
               {book || "No book recorded for this date."}
               </div>
             </div>
