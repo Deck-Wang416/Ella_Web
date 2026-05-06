@@ -194,22 +194,21 @@ export default function Dashboard() {
         <section className="card p-5 text-sm text-red-600">{errorText}</section>
       )}
 
-      {activeCondition === "parent" && (
-        <section className="card p-5">
-          <p className="section-title">Book</p>
-          <div className="mt-4 rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
-            {book || "No book recorded for this date."}
-          </div>
-        </section>
-      )}
-
       {activeCondition === "parent" ? (
-        <ParentAudioRecorder
-          caregiverId={caregiverId}
-          date={selectedDate}
-          enabled
-          onRecorderBusyChange={setRecorderBusy}
-        />
+        <>
+          <ParentAudioRecorder
+            caregiverId={caregiverId}
+            date={selectedDate}
+            enabled
+            onRecorderBusyChange={setRecorderBusy}
+          />
+          <section className="card p-5">
+            <p className="section-title">Book for today</p>
+            <div className="mt-4 rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
+              {book || "No book recorded for this date."}
+            </div>
+          </section>
+        </>
       ) : (
         <section className="card p-5">
           <div className="flex items-center justify-between">
