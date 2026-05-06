@@ -118,6 +118,7 @@ export default function Dashboard() {
 
   const activeCondition = dailyData?.condition || "robot";
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
+  const book = activeCondition === "parent" ? dailyData?.dashboard?.book || null : null;
   const words = dailyData?.dashboard?.words || [];
   const highlight = dailyData?.dashboard?.highlight || [];
   const ask = dailyData?.dashboard?.ask || [];
@@ -191,6 +192,15 @@ export default function Dashboard() {
 
       {errorText && (
         <section className="card p-5 text-sm text-red-600">{errorText}</section>
+      )}
+
+      {activeCondition === "parent" && (
+        <section className="card p-5">
+          <p className="section-title">Book</p>
+          <div className="mt-4 rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm">
+            {book || "No book recorded for this date."}
+          </div>
+        </section>
       )}
 
       {activeCondition === "parent" ? (
