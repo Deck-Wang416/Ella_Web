@@ -1,6 +1,6 @@
 export const TEST_ACCOUNTS = [
-  { username: "Caregiver1", password: "123456", caregiverId: 1 },
-  { username: "Caregiver2", password: "123456", caregiverId: 2 },
+  { username: "Leyun", password: "123456", caregiverId: 1 },
+  { username: "Yoonjae", password: "123456", caregiverId: 2 },
   { username: "Caregiver3", password: "123456", caregiverId: 3 },
   { username: "Caregiver4", password: "123456", caregiverId: 4 },
   { username: "Caregiver5", password: "123456", caregiverId: 5 },
