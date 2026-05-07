@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "ella_auth_session";
+const SESSION_VERSION = 2;
 
 const CaregiverContext = createContext({
   caregiverId: null,
@@ -14,7 +15,11 @@ export function CaregiverProvider({ children }) {
   const [session, setSession] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed?.version !== SESSION_VERSION) return null;
+      if (!parsed?.caregiverId || !parsed?.username) return null;
+      return parsed;
     } catch {
       return null;
     }
@@ -35,7 +40,11 @@ export function CaregiverProvider({ children }) {
       isAuthenticated: Boolean(session?.caregiverId),
       login: (account) => {
         if (!account?.caregiverId || !account?.username) return false;
-        setSession({ caregiverId: account.caregiverId, username: account.username });
+        setSession({
+          version: SESSION_VERSION,
+          caregiverId: account.caregiverId,
+          username: account.username,
+        });
         return true;
       },
       logout: () => {
