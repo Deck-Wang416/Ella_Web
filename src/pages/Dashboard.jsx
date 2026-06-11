@@ -117,11 +117,14 @@ export default function Dashboard() {
   }, [caregiverId, isActivePeriod, selectedDate]);
 
   const activeCondition = dailyData?.condition || "robot";
+  const dashboard = dailyData?.dashboard || {};
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
-  const book = activeCondition === "parent" ? dailyData?.dashboard?.book || null : null;
-  const words = dailyData?.dashboard?.words || [];
-  const highlight = dailyData?.dashboard?.highlight || [];
-  const ask = dailyData?.dashboard?.ask || [];
+  const book = activeCondition === "parent" ? dashboard.book || null : null;
+  const storyCount = activeCondition === "robot" ? dashboard.storyCount : null;
+  const words = dashboard.words || [];
+  const highlight = dashboard.highlight || [];
+  const ask = dashboard.ask || [];
+  const weeklyProgress = dashboard.weeklyProgress || null;
 
   useEffect(() => {
     if (photos.length <= 1) return;
@@ -193,6 +196,8 @@ export default function Dashboard() {
       {errorText && (
         <section className="card p-5 text-sm text-red-600">{errorText}</section>
       )}
+
+      <WeeklyProgressCard condition={activeCondition} weeklyProgress={weeklyProgress} />
 
       {activeCondition === "parent" ? (
         <>
@@ -315,4 +320,47 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function WeeklyProgressCard({ condition, weeklyProgress }) {
+  if (!weeklyProgress) return null;
+
+  const startDate = weeklyProgress.startDate || null;
+  const endDate = weeklyProgress.endDate || null;
+  const currentValue = formatWeeklyCurrentValue(condition, weeklyProgress.currentValue);
+  const goalLabel = formatWeeklyTargetValue(weeklyProgress.targetValue, weeklyProgress.unit);
+
+  return (
+    <section className="card p-5">
+      <p className="section-title">Weekly progress</p>
+      <div className="mt-4 flex flex-col gap-2">
+        <p className="text-2xl font-semibold text-ink-900">
+          {currentValue} / {goalLabel}
+        </p>
+        {(startDate || endDate) && (
+          <p className="text-sm text-ink-500">
+            {startDate || "—"} to {endDate || "—"}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatWeeklyCurrentValue(condition, rawValue) {
+  if (rawValue == null || Number.isNaN(Number(rawValue))) return "0";
+
+  const numeric = Number(rawValue);
+  if (condition === "robot") return String(Math.round(numeric));
+  return numeric % 1 === 0 ? String(numeric.toFixed(0)) : String(numeric.toFixed(1));
+}
+
+function formatWeeklyTargetValue(targetValue, unit) {
+  if (targetValue == null || Number.isNaN(Number(targetValue))) {
+    return unit ? `0 ${unit}` : "0";
+  }
+
+  const numeric = Number(targetValue);
+  const formatted = numeric % 1 === 0 ? String(numeric.toFixed(0)) : String(numeric.toFixed(1));
+  return unit ? `${formatted} ${unit}` : formatted;
 }
