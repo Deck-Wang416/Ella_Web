@@ -1,5 +1,5 @@
 {
   "childName": "Child",
-  "dayProgress": "Day progress",
+  "dayCount": null,
   "themes": ["Friendship", "Food", "Colors", "Sharing"]
 }
