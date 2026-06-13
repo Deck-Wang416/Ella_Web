@@ -17,18 +17,11 @@ export default function ProfileModal({ open, onClose }) {
         </div>
 
         <div className="mt-6 grid gap-6">
-          <div className="flex items-center gap-4">
-            <img
-              src={profileData.childPhoto}
-              alt="Child"
-              className="h-20 w-20 rounded-2xl object-cover"
-            />
-            <div>
-              <p className="text-sm text-ink-500">Child name</p>
-              <p className="text-xl font-semibold">{profileData.childName}</p>
-              <p className="mt-1 text-sm text-ink-500">Day</p>
-              <p className="text-sm font-semibold text-ink-700">{profileData.dayProgress}</p>
-            </div>
+          <div className="rounded-3xl border border-ink-100 bg-ink-100/70 p-5">
+            <p className="text-sm text-ink-500">Child name</p>
+            <p className="mt-1 text-xl font-semibold">{profileData.childName}</p>
+            <p className="mt-4 text-sm text-ink-500">Day</p>
+            <p className="mt-1 text-sm font-semibold text-ink-700">{profileData.dayProgress}</p>
           </div>
 
           <div>
