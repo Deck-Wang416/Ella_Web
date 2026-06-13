@@ -25,7 +25,7 @@ export default function ProfileModal({ open, onClose }) {
   }, [dayCount]);
 
   useEffect(() => {
-    if (Array.isArray(profile?.themes) && profile.themes.length > 0) {
+    if (Array.isArray(profile?.themes)) {
       setThemes(profile.themes);
       return;
     }
