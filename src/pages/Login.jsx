@@ -31,7 +31,7 @@ export default function Login() {
       <main className="mx-auto flex w-full max-w-md flex-col gap-6 px-5 py-12">
         <div className="text-center">
           <h1 className="font-display text-3xl">Welcome back</h1>
-          <p className="mt-2 text-sm text-ink-500">Please log in with the account provided by your team.</p>
+          <p className="mt-2 text-sm text-ink-500">Please log in with the account provided by the ELLA team.</p>
         </div>
         <div className="card p-6">
           <label className="text-sm font-semibold text-ink-700">Username</label>
