@@ -83,7 +83,7 @@ export default function ProfileModal({ open, onClose }) {
           <div>
             <p className="text-sm text-ink-500">Child name</p>
             <p className="mt-1 text-xl font-semibold">{childName}</p>
-            <p className="mt-4 text-sm text-ink-500">Day</p>
+            <p className="mt-4 text-sm text-ink-500">Day progress</p>
             <p className="mt-1 text-sm font-semibold text-ink-700">{dayLabel}</p>
           </div>
 
