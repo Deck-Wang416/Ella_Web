@@ -80,7 +80,7 @@ export default function ProfileModal({ open, onClose }) {
         </div>
 
         <div className="mt-6 grid gap-6">
-          <div className="rounded-3xl border border-ink-100 bg-ink-100/70 p-5">
+          <div>
             <p className="text-sm text-ink-500">Child name</p>
             <p className="mt-1 text-xl font-semibold">{childName}</p>
             <p className="mt-4 text-sm text-ink-500">Day</p>
