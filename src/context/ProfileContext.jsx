@@ -11,8 +11,8 @@ const ProfileContext = createContext({
 });
 
 export function ProfileProvider({ children }) {
-  const { caregiverId, isAuthenticated } = useCaregiver();
-  const [profile, setProfile] = useState(null);
+  const { caregiverId, isAuthenticated, profile: sessionProfile, updateProfileSnapshot } = useCaregiver();
+  const [profile, setProfile] = useState(sessionProfile);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState("");
 
@@ -28,6 +28,7 @@ export function ProfileProvider({ children }) {
     try {
       const data = await getProfileByCaregiver(caregiverId);
       setProfile(data);
+      updateProfileSnapshot(data);
       setProfileError("");
     } catch (error) {
       setProfile(null);
@@ -40,6 +41,12 @@ export function ProfileProvider({ children }) {
       setLoadingProfile(false);
     }
   }
+
+  useEffect(() => {
+    if (sessionProfile) {
+      setProfile(sessionProfile);
+    }
+  }, [sessionProfile]);
 
   useEffect(() => {
     refreshProfile();

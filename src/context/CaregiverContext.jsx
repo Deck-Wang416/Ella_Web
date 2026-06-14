@@ -6,9 +6,11 @@ const SESSION_VERSION = 2;
 const CaregiverContext = createContext({
   caregiverId: null,
   username: "",
+  profile: null,
   isAuthenticated: false,
   login: () => false,
   logout: () => {},
+  updateProfileSnapshot: () => {},
 });
 
 export function CaregiverProvider({ children }) {
@@ -37,18 +39,32 @@ export function CaregiverProvider({ children }) {
     () => ({
       caregiverId: session?.caregiverId ?? null,
       username: session?.username ?? "",
+      profile: session?.profile ?? null,
       isAuthenticated: Boolean(session?.caregiverId),
-      login: (account) => {
-        if (!account?.caregiverId || !account?.username) return false;
+      login: (profile) => {
+        if (!profile?.caregiverId || !profile?.username) return false;
         setSession({
           version: SESSION_VERSION,
-          caregiverId: account.caregiverId,
-          username: account.username,
+          caregiverId: profile.caregiverId,
+          username: profile.username,
+          profile,
         });
         return true;
       },
       logout: () => {
         setSession(null);
+      },
+      updateProfileSnapshot: (profile) => {
+        if (!profile?.caregiverId || !profile?.username) return;
+        setSession((current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            caregiverId: profile.caregiverId,
+            username: profile.username,
+            profile,
+          };
+        });
       },
     }),
     [session]

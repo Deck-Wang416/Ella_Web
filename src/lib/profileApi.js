@@ -26,6 +26,19 @@ export async function getProfileByCaregiver(caregiverId) {
   return requestJson(`${API_BASE}/profiles/${encodeURIComponent(caregiverId)}`);
 }
 
+export async function loginProfile(username, password) {
+  return requestJson(`${API_BASE}/profiles/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      username,
+      password,
+    }),
+  });
+}
+
 export async function updateProfileByCaregiver(caregiverId, payload) {
   return requestJson(`${API_BASE}/profiles/${encodeURIComponent(caregiverId)}`, {
     method: "PUT",
