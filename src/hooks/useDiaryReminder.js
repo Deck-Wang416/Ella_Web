@@ -1,29 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { ApiError, formatTodayDate, getDailyByDate } from '../lib/dailyApi.js';
+import { getAppTimeParts } from '../lib/timezone.js';
 
 const REMINDER_SLOTS = ['18:00', '21:00'];
 
-function parseSlot(slot) {
-  const [h, m] = slot.split(':').map(Number);
-  return { hour: h, minute: m };
+function parseReminderSlot(slot) {
+  const [hour, minute] = slot.split(':').map(Number);
+  return { hour, minute };
 }
 
 function slotKey(caregiverId, date, slot) {
   return `ella_reminder_sent_${caregiverId}_${date}_${slot}`;
-}
-
-function nextSchedule(now) {
-  const candidates = REMINDER_SLOTS
-    .map((slot) => {
-      const { hour, minute } = parseSlot(slot);
-      const next = new Date(now);
-      next.setHours(hour, minute, 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      return { slot, time: next };
-    })
-    .sort((a, b) => a.time.getTime() - b.time.getTime());
-
-  return candidates[0];
 }
 
 async function isTodaySubmitted(caregiverId) {
@@ -66,7 +53,8 @@ async function showReminder(slot, caregiverId) {
 }
 
 export function useDiaryReminder(caregiverId, enabled = true) {
-  const timerRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const intervalRef = useRef(null);
   const startedForRef = useRef(null);
 
   useEffect(() => {
@@ -87,23 +75,35 @@ export function useDiaryReminder(caregiverId, enabled = true) {
       }
     }
 
+    async function tick() {
+      const { hour, minute } = getAppTimeParts(new Date());
+      const slot = REMINDER_SLOTS.find((entry) => {
+        const { hour: slotHour, minute: slotMinute } = parseReminderSlot(entry);
+        return slotHour === hour && slotMinute === minute;
+      });
+
+      if (slot) {
+        await showReminder(slot, caregiverId);
+      }
+    }
+
     function schedule() {
       const now = new Date();
-      const next = nextSchedule(now);
-      const delay = Math.max(0, next.time.getTime() - now.getTime());
+      const delay = 60000 - (now.getSeconds() * 1000 + now.getMilliseconds());
 
-      timerRef.current = window.setTimeout(async () => {
-        await showReminder(next.slot, caregiverId);
-        schedule();
+      timeoutRef.current = window.setTimeout(() => {
+        void tick();
+        intervalRef.current = window.setInterval(() => {
+          void tick();
+        }, 60000);
       }, delay);
     }
 
     ensurePermission().finally(schedule);
 
     return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [caregiverId, enabled]);
 }

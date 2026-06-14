@@ -1,19 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { formatAppDate } from "../lib/timezone.js";
 
 const DateContext = createContext(null);
 const STORAGE_KEY = "ella_selected_date";
 
-function formatLocalDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 export function DateProvider({ children }) {
   const [selectedDate, setSelectedDate] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored || formatLocalDate(new Date());
+    return stored || formatAppDate(new Date());
   });
 
   useEffect(() => {

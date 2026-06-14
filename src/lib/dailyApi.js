@@ -1,7 +1,7 @@
 import { getApiBase } from "./apiBase.js";
+import { APP_TIMEZONE, formatAppDate } from "./timezone.js";
 
 const API_BASE = getApiBase();
-const TIMEZONE = "America/New_York";
 
 export class ApiError extends Error {
   constructor(status, message, data = null) {
@@ -13,7 +13,7 @@ export class ApiError extends Error {
 }
 
 function withDailyQuery(path, caregiverId) {
-  const tz = encodeURIComponent(TIMEZONE);
+  const tz = encodeURIComponent(APP_TIMEZONE);
   const id = encodeURIComponent(caregiverId);
   const join = path.includes("?") ? "&" : "?";
   return `${API_BASE}${path}${join}timezone=${tz}&caregiver_id=${id}`;
@@ -60,11 +60,7 @@ export async function updateDailyByDate(date, payload, caregiverId) {
 }
 
 export function formatTodayDate() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return formatAppDate(new Date());
 }
 
 export function nearestDate(targetDate, dates) {
