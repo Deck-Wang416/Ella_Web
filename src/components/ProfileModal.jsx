@@ -16,7 +16,7 @@ export default function ProfileModal({ open, onClose }) {
 
   const dayLabel = useMemo(() => {
     if (typeof dayCount === "number" && Number.isFinite(dayCount)) {
-      return `Day ${dayCount}`;
+      return `${dayCount} Days`;
     }
     if (typeof dayCount === "string" && dayCount.trim()) {
       return dayCount;
