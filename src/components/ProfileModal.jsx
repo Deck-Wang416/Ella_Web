@@ -7,11 +7,13 @@ export default function ProfileModal({ open, onClose }) {
   const { profile, refreshProfile } = useProfile();
   const childName = profile?.username || "";
   const [themes, setThemes] = useState(profileData.themes);
+  const [savedThemes, setSavedThemes] = useState(profileData.themes);
   const [themeDraft, setThemeDraft] = useState("");
   const [savingThemes, setSavingThemes] = useState(false);
   const [themeError, setThemeError] = useState("");
   const dayCount = profile?.dayCount ?? profileData.dayCount;
   const caregiverId = profile?.caregiverId;
+  const isDirty = JSON.stringify(themes) !== JSON.stringify(savedThemes);
 
   const dayLabel = useMemo(() => {
     if (typeof dayCount === "number" && Number.isFinite(dayCount)) {
@@ -26,14 +28,30 @@ export default function ProfileModal({ open, onClose }) {
   useEffect(() => {
     if (Array.isArray(profile?.themes)) {
       setThemes(profile.themes);
+      setSavedThemes(profile.themes);
       return;
     }
     setThemes(profileData.themes);
+    setSavedThemes(profileData.themes);
   }, [profile]);
+
+  useEffect(() => {
+    if (!open || !isDirty) return undefined;
+
+    function handleBeforeUnload(event) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isDirty, open]);
 
   if (!open) return null;
 
-  async function saveThemes(nextThemes) {
+  async function saveThemes() {
     if (!caregiverId) {
       setThemeError("Unable to save themes right now.");
       return;
@@ -43,8 +61,8 @@ export default function ProfileModal({ open, onClose }) {
     setThemeError("");
 
     try {
-      await updateProfileByCaregiver(caregiverId, { themes: nextThemes });
-      setThemes(nextThemes);
+      await updateProfileByCaregiver(caregiverId, { themes });
+      setSavedThemes(themes);
       await refreshProfile();
     } catch {
       setThemeError("Unable to save themes right now.");
@@ -54,18 +72,25 @@ export default function ProfileModal({ open, onClose }) {
   }
 
   function handleRemoveTheme(themeToRemove) {
-    const confirmed = window.confirm(`Remove theme "${themeToRemove}"?`);
-    if (!confirmed) return;
-    const nextThemes = themes.filter((theme) => theme !== themeToRemove);
-    void saveThemes(nextThemes);
+    setThemes((current) => current.filter((theme) => theme !== themeToRemove));
   }
 
   function handleAddTheme() {
     const nextTheme = themeDraft.trim();
     if (!nextTheme) return;
-    const nextThemes = themes.includes(nextTheme) ? themes : [...themes, nextTheme];
-    void saveThemes(nextThemes);
+    setThemes((current) => (current.includes(nextTheme) ? current : [...current, nextTheme]));
     setThemeDraft("");
+  }
+
+  function handleClose() {
+    if (isDirty) {
+      const confirmed = window.confirm("You have unsaved theme changes. Discard them and close?");
+      if (!confirmed) return;
+      setThemes(savedThemes);
+      setThemeDraft("");
+      setThemeError("");
+    }
+    onClose();
   }
 
   return (
@@ -73,7 +98,7 @@ export default function ProfileModal({ open, onClose }) {
       <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-card sm:rounded-[32px]">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-2xl">Child Profile</h2>
-          <button type="button" onClick={onClose} className="btn-ghost">
+          <button type="button" onClick={handleClose} className="btn-ghost">
             Close
           </button>
         </div>
@@ -124,6 +149,16 @@ export default function ProfileModal({ open, onClose }) {
                 onClick={handleAddTheme}
               >
                 {savingThemes ? "Saving..." : "+"}
+              </button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                className={`btn-primary ${!isDirty || savingThemes ? "opacity-50" : ""}`}
+                disabled={!isDirty || savingThemes}
+                onClick={() => void saveThemes()}
+              >
+                {savingThemes ? "Saving..." : "Save"}
               </button>
             </div>
             {themeError && <p className="mt-3 text-sm text-red-500">{themeError}</p>}

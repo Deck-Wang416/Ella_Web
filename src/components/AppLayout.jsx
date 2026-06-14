@@ -10,7 +10,8 @@ import { useProfile } from "../context/ProfileContext.jsx";
 export default function AppLayout({ active, children }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const { caregiverId, username, logout } = useCaregiver();
-  const { loadingProfile, profileStatus } = useProfile();
+  const { loadingProfile, profileStatus, profile } = useProfile();
+  const displayUsername = profile?.username || username;
   const reminderEnabled =
     import.meta.env.VITE_ENABLE_LOCAL_REMINDER === "true" &&
     !loadingProfile &&
@@ -33,7 +34,7 @@ export default function AppLayout({ active, children }) {
     <div className="min-h-screen">
       <Header
         active={active}
-        username={username}
+        username={displayUsername}
         onLogout={handleLogout}
         onOpenProfile={() => setProfileOpen(true)}
       />
