@@ -5,12 +5,11 @@ import { updateProfileByCaregiver } from "../lib/profileApi.js";
 
 export default function ProfileModal({ open, onClose }) {
   const { profile, refreshProfile } = useProfile();
+  const childName = profile?.username || "";
   const [themes, setThemes] = useState(profileData.themes);
   const [themeDraft, setThemeDraft] = useState("");
   const [savingThemes, setSavingThemes] = useState(false);
   const [themeError, setThemeError] = useState("");
-
-  const childName = profile?.childName || profileData.childName;
   const dayCount = profile?.dayCount ?? profileData.dayCount;
   const caregiverId = profile?.caregiverId;
 
@@ -82,7 +81,7 @@ export default function ProfileModal({ open, onClose }) {
         <div className="mt-6 grid gap-6">
           <div>
             <p className="text-sm text-ink-500">Child name</p>
-            <p className="mt-1 text-xl font-semibold">{childName}</p>
+            <p className="mt-1 text-xl font-semibold">{childName || "Not available"}</p>
             <p className="mt-4 text-sm text-ink-500">Day progress</p>
             <p className="mt-1 text-sm font-semibold text-ink-700">{dayLabel}</p>
           </div>
