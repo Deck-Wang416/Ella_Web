@@ -72,6 +72,8 @@ export default function ProfileModal({ open, onClose }) {
   }
 
   function handleRemoveTheme(themeToRemove) {
+    const confirmed = window.confirm(`Remove "${themeToRemove}" from themes?`);
+    if (!confirmed) return;
     setThemes((current) => current.filter((theme) => theme !== themeToRemove));
   }
 
@@ -98,7 +100,7 @@ export default function ProfileModal({ open, onClose }) {
       <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-card sm:rounded-[32px]">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-2xl">Child Profile</h2>
-          <button type="button" onClick={handleClose} className="btn-ghost">
+          <button type="button" onClick={handleClose} className="btn-ghost h-10 w-24 shrink-0 px-4 py-0">
             Close
           </button>
         </div>
@@ -112,9 +114,7 @@ export default function ProfileModal({ open, onClose }) {
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
-              <p className="section-title">Themes</p>
-            </div>
+            <p className="section-title">Themes</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {themes.map((theme) => (
                 <span
@@ -138,23 +138,29 @@ export default function ProfileModal({ open, onClose }) {
               <input
                 value={themeDraft}
                 onChange={(event) => setThemeDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAddTheme();
+                  }
+                }}
                 className="input flex-1"
                 placeholder="Add a theme"
                 disabled={savingThemes}
               />
               <button
                 type="button"
-                className={`btn-primary ${!themeDraft.trim() || savingThemes ? "opacity-50" : ""}`}
+                className={`btn-ghost h-10 w-24 shrink-0 px-4 py-0 ${!themeDraft.trim() || savingThemes ? "opacity-50" : ""}`}
                 disabled={!themeDraft.trim() || savingThemes}
                 onClick={handleAddTheme}
               >
-                {savingThemes ? "Saving..." : "+"}
+                Add
               </button>
             </div>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4">
               <button
                 type="button"
-                className={`btn-primary ${!isDirty || savingThemes ? "opacity-50" : ""}`}
+                className={`btn-primary h-11 w-full px-4 py-0 ${!isDirty || savingThemes ? "opacity-50" : ""}`}
                 disabled={!isDirty || savingThemes}
                 onClick={() => void saveThemes()}
               >
