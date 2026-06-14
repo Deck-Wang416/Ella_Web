@@ -55,6 +55,8 @@ export default function ProfileModal({ open, onClose }) {
   }
 
   function handleRemoveTheme(themeToRemove) {
+    const confirmed = window.confirm(`Remove theme "${themeToRemove}"?`);
+    if (!confirmed) return;
     const nextThemes = themes.filter((theme) => theme !== themeToRemove);
     void saveThemes(nextThemes);
   }
@@ -88,7 +90,6 @@ export default function ProfileModal({ open, onClose }) {
           <div>
             <div className="flex items-center justify-between">
               <p className="section-title">Themes</p>
-              <span className="text-xs text-ink-500">Editable</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {themes.map((theme) => (
