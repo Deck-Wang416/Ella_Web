@@ -168,6 +168,7 @@ export default function ParentDiary() {
         .map((item) => item.date),
     [summaries]
   );
+  const showSubmittedLegend = markedDates.includes(today);
 
   const hasSubmitted = Boolean(dailyData?.diary?.submitted);
   const isEditable = Boolean(dailyData?.meta?.diaryEditable ?? selectedSummary?.diaryEditable);
@@ -345,7 +346,14 @@ export default function ParentDiary() {
           availableDates={availableDates}
           markedDates={markedDates}
           useAvailabilityStyles
-          helperText={<span><span className="text-brand-500">●</span> Today&apos;s diary submitted</span>}
+          helperText={
+            showSubmittedLegend ? (
+              <span>
+                <span className="text-brand-500">●</span> Today&apos;s diary submitted
+              </span>
+            ) : null
+          }
+          showHelperText={showSubmittedLegend}
         />
       </section>
 
