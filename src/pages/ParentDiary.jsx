@@ -345,7 +345,7 @@ export default function ParentDiary() {
           availableDates={availableDates}
           markedDates={markedDates}
           useAvailabilityStyles
-          helperText={<span><span className="text-brand-500">●</span> Today</span>}
+          helperText={<span><span className="text-brand-500">●</span> Today&apos;s diary submitted</span>}
         />
       </section>
 
