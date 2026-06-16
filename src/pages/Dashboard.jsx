@@ -130,7 +130,7 @@ export default function Dashboard() {
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
   const book = activeCondition === "parent" ? dashboard.book || null : null;
   const weeklyProgress = dashboard.weeklyProgress || null;
-  const shouldProtectThemeChanges = activeCondition === "robot" && isThemeDirty;
+  const shouldProtectThemeChanges = isThemeDirty;
 
   useEffect(() => {
     if (Array.isArray(profile?.themes)) {
@@ -430,12 +430,23 @@ function WeeklyProgressCard({ condition, weeklyProgress }) {
 
   const startDate = weeklyProgress.startDate || null;
   const endDate = weeklyProgress.endDate || null;
+  const hasReachedTarget = hasMetWeeklyTarget(
+    weeklyProgress.currentValue,
+    weeklyProgress.targetValue
+  );
   const currentValue = formatWeeklyCurrentValue(condition, weeklyProgress.currentValue);
   const goalLabel = formatWeeklyTargetValue(weeklyProgress.targetValue, weeklyProgress.unit);
 
   return (
     <section className="card p-5">
-      <p className="section-title">Weekly progress</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="section-title">Weekly progress</p>
+        {hasReachedTarget && (
+          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+            Goal reached
+          </span>
+        )}
+      </div>
       <div className="mt-4 flex flex-col gap-2">
         <p className="text-2xl font-semibold text-ink-900">
           {currentValue} / {goalLabel}
@@ -448,6 +459,14 @@ function WeeklyProgressCard({ condition, weeklyProgress }) {
       </div>
     </section>
   );
+}
+
+function hasMetWeeklyTarget(currentValue, targetValue) {
+  const current = Number(currentValue);
+  const target = Number(targetValue);
+
+  if (Number.isNaN(current) || Number.isNaN(target)) return false;
+  return current >= target;
 }
 
 function formatWeeklyCurrentValue(condition, rawValue) {
