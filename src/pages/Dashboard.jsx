@@ -11,7 +11,6 @@ import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { useProfile } from "../context/ProfileContext.jsx";
 import ExperimentBlockedState from "../components/ExperimentBlockedState.jsx";
-import profileData from "../data/profile.json";
 import { updateProfileByCaregiver } from "../lib/profileApi.js";
 
 export default function Dashboard() {
@@ -25,8 +24,8 @@ export default function Dashboard() {
   const [loadingSummaries, setLoadingSummaries] = useState(true);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [recorderBusy, setRecorderBusy] = useState(false);
-  const [themes, setThemes] = useState(profileData.themes);
-  const [savedThemes, setSavedThemes] = useState(profileData.themes);
+  const [themes, setThemes] = useState([]);
+  const [savedThemes, setSavedThemes] = useState([]);
   const [themeDraft, setThemeDraft] = useState("");
   const [savingThemes, setSavingThemes] = useState(false);
   const [themeError, setThemeError] = useState("");
@@ -130,7 +129,7 @@ export default function Dashboard() {
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
   const book = activeCondition === "parent" ? dashboard.book || null : null;
   const weeklyProgress = dashboard.weeklyProgress || null;
-  const shouldProtectThemeChanges = isThemeDirty;
+  const shouldProtectThemeChanges = activeCondition === "robot" && isThemeDirty;
 
   useEffect(() => {
     if (Array.isArray(profile?.themes)) {
@@ -138,8 +137,8 @@ export default function Dashboard() {
       setSavedThemes(profile.themes);
       return;
     }
-    setThemes(profileData.themes);
-    setSavedThemes(profileData.themes);
+    setThemes([]);
+    setSavedThemes([]);
   }, [profile]);
 
   useEffect(() => {
@@ -160,13 +159,21 @@ export default function Dashboard() {
     return window.confirm(message);
   }
 
+  function discardUnsavedThemeChanges() {
+    setThemes(savedThemes);
+    setThemeDraft("");
+    setThemeError("");
+  }
+
   function handleRemoveTheme(themeToRemove) {
+    if (activeCondition !== "robot") return;
     const confirmed = window.confirm(`Remove "${themeToRemove}" from themes?`);
     if (!confirmed) return;
     setThemes((current) => current.filter((theme) => theme !== themeToRemove));
   }
 
   function handleAddTheme() {
+    if (activeCondition !== "robot") return;
     const nextTheme = themeDraft.trim();
     if (!nextTheme) return;
     setThemes((current) => (current.includes(nextTheme) ? current : [...current, nextTheme]));
@@ -174,6 +181,7 @@ export default function Dashboard() {
   }
 
   async function saveThemes() {
+    if (activeCondition !== "robot") return;
     if (!caregiverId) {
       setThemeError("Unable to save themes right now.");
       return;
@@ -234,6 +242,12 @@ export default function Dashboard() {
     event.returnValue = "";
   });
 
+  useEffect(() => {
+    if (activeCondition === "robot") return;
+    setThemeDraft("");
+    setThemeError("");
+  }, [activeCondition]);
+
   if (loadingProfile) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-[1px]">
@@ -283,6 +297,9 @@ export default function Dashboard() {
             }
             if (!confirmThemeLeave("You have unsaved theme changes. If you switch date, new changes will be lost.")) {
               return;
+            }
+            if (shouldProtectThemeChanges) {
+              discardUnsavedThemeChanges();
             }
             setSelectedDate(nextDate);
           }}
