@@ -121,9 +121,6 @@ export default function Dashboard() {
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
   const book = activeCondition === "parent" ? dashboard.book || null : null;
   const storyCount = activeCondition === "robot" ? dashboard.storyCount : null;
-  const words = dashboard.words || [];
-  const highlight = dashboard.highlight || [];
-  const ask = dashboard.ask || [];
   const weeklyProgress = dashboard.weeklyProgress || null;
 
   useEffect(() => {
@@ -264,60 +261,6 @@ export default function Dashboard() {
         </section>
       )}
 
-      <section className="card p-5">
-        <p className="section-title">Words from today</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {words.length > 0 ? (
-            words.map((word) => (
-              <span key={word} className="rounded-full bg-ink-100 px-3 py-1 text-sm">
-                {word}
-              </span>
-            ))
-          ) : (
-            <p className="text-sm text-ink-500">No words recorded for this date.</p>
-          )}
-        </div>
-      </section>
-
-      {activeCondition === "robot" && (
-        <>
-          <section className="card p-5">
-            <p className="section-title">Highlight</p>
-            <div className="mt-4 grid gap-3">
-              {highlight.length > 0 ? (
-                highlight.map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
-                  >
-                    {item}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-ink-500">No highlights for this date.</p>
-              )}
-            </div>
-          </section>
-
-          <section className="card p-5">
-            <p className="section-title">Ask</p>
-            <div className="mt-4 grid gap-3">
-              {ask.length > 0 ? (
-                ask.map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-ink-200 bg-ink-100 px-4 py-3 text-sm"
-                  >
-                    {item}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-ink-500">No suggested questions for this date.</p>
-              )}
-            </div>
-          </section>
-        </>
-      )}
     </div>
   );
 }
