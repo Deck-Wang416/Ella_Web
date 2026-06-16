@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useBeforeUnload } from "react-router-dom";
 import DatePicker from "../components/DatePicker.jsx";
 import {
   formatTodayDate,
@@ -10,10 +11,12 @@ import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { useProfile } from "../context/ProfileContext.jsx";
 import ExperimentBlockedState from "../components/ExperimentBlockedState.jsx";
+import profileData from "../data/profile.json";
+import { updateProfileByCaregiver } from "../lib/profileApi.js";
 
 export default function Dashboard() {
   const { caregiverId } = useCaregiver();
-  const { loadingProfile, profileError, profileStatus } = useProfile();
+  const { loadingProfile, profile, profileError, profileStatus, refreshProfile } = useProfile();
   const [summaries, setSummaries] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [dailyData, setDailyData] = useState(null);
@@ -22,9 +25,15 @@ export default function Dashboard() {
   const [loadingSummaries, setLoadingSummaries] = useState(true);
   const [loadingDaily, setLoadingDaily] = useState(true);
   const [recorderBusy, setRecorderBusy] = useState(false);
+  const [themes, setThemes] = useState(profileData.themes);
+  const [savedThemes, setSavedThemes] = useState(profileData.themes);
+  const [themeDraft, setThemeDraft] = useState("");
+  const [savingThemes, setSavingThemes] = useState(false);
+  const [themeError, setThemeError] = useState("");
   const today = formatTodayDate();
   const isActivePeriod =
     profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active";
+  const isThemeDirty = JSON.stringify(themes) !== JSON.stringify(savedThemes);
 
   const availableDates = useMemo(
     () => (
@@ -120,8 +129,18 @@ export default function Dashboard() {
   const dashboard = dailyData?.dashboard || {};
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
   const book = activeCondition === "parent" ? dashboard.book || null : null;
-  const storyCount = activeCondition === "robot" ? dashboard.storyCount : null;
   const weeklyProgress = dashboard.weeklyProgress || null;
+  const shouldProtectThemeChanges = activeCondition === "robot" && isThemeDirty;
+
+  useEffect(() => {
+    if (Array.isArray(profile?.themes)) {
+      setThemes(profile.themes);
+      setSavedThemes(profile.themes);
+      return;
+    }
+    setThemes(profileData.themes);
+    setSavedThemes(profileData.themes);
+  }, [profile]);
 
   useEffect(() => {
     if (photos.length <= 1) return;
@@ -135,6 +154,85 @@ export default function Dashboard() {
     if (!recorderBusy) return true;
     return window.confirm(message);
   }
+
+  function confirmThemeLeave(message) {
+    if (!shouldProtectThemeChanges) return true;
+    return window.confirm(message);
+  }
+
+  function handleRemoveTheme(themeToRemove) {
+    const confirmed = window.confirm(`Remove "${themeToRemove}" from themes?`);
+    if (!confirmed) return;
+    setThemes((current) => current.filter((theme) => theme !== themeToRemove));
+  }
+
+  function handleAddTheme() {
+    const nextTheme = themeDraft.trim();
+    if (!nextTheme) return;
+    setThemes((current) => (current.includes(nextTheme) ? current : [...current, nextTheme]));
+    setThemeDraft("");
+  }
+
+  async function saveThemes() {
+    if (!caregiverId) {
+      setThemeError("Unable to save themes right now.");
+      return;
+    }
+
+    setSavingThemes(true);
+    setThemeError("");
+
+    try {
+      await updateProfileByCaregiver(caregiverId, { themes });
+      setSavedThemes(themes);
+      await refreshProfile();
+    } catch {
+      setThemeError("Unable to save themes right now.");
+    } finally {
+      setSavingThemes(false);
+    }
+  }
+
+  useEffect(() => {
+    function handleDocumentClick(event) {
+      if (!shouldProtectThemeChanges) return;
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest("a[href]");
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+
+      const nextUrl = new URL(href, window.location.origin);
+      const currentUrl = new URL(window.location.href);
+      const isSameRoute =
+        nextUrl.pathname === currentUrl.pathname &&
+        nextUrl.search === currentUrl.search &&
+        nextUrl.hash === currentUrl.hash;
+      if (isSameRoute) return;
+
+      const confirmed = window.confirm(
+        "You have unsaved theme changes. If you leave now, new changes will be lost."
+      );
+      if (!confirmed) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    document.addEventListener("click", handleDocumentClick, true);
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [shouldProtectThemeChanges]);
+
+  useBeforeUnload((event) => {
+    if (!shouldProtectThemeChanges) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
 
   if (loadingProfile) {
     return (
@@ -183,6 +281,9 @@ export default function Dashboard() {
             if (!confirmRecorderLeave("Recording is still in progress. If you switch date now, the current recording may stop before it finishes uploading. Continue?")) {
               return;
             }
+            if (!confirmThemeLeave("You have unsaved theme changes. If you switch date, new changes will be lost.")) {
+              return;
+            }
             setSelectedDate(nextDate);
           }}
           availableDates={availableDates}
@@ -214,51 +315,110 @@ export default function Dashboard() {
           </section>
         </>
       ) : (
-        <section className="card p-5">
-          <div className="flex items-center justify-between">
-            <p className="section-title">Photo</p>
-            {photos.length > 0 && (
-              <span className="text-xs text-ink-500">
-                {photoIndex + 1}/{photos.length}
-              </span>
-            )}
-          </div>
-          <div className="relative mt-4">
-            {photos.length > 0 ? (
-              <img
-                src={photos[photoIndex]}
-                alt="Child and ELLA"
-                className="h-48 w-full rounded-2xl object-cover"
-              />
-            ) : (
-              <div className="flex h-48 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
-                No photo for this date.
-              </div>
-            )}
-            {photos.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
+        <>
+          <section className="card p-5">
+            <div className="flex items-center justify-between">
+              <p className="section-title">Photo</p>
+              {photos.length > 0 && (
+                <span className="text-xs text-ink-500">
+                  {photoIndex + 1}/{photos.length}
+                </span>
+              )}
+            </div>
+            <div className="relative mt-4">
+              {photos.length > 0 ? (
+                <img
+                  src={photos[photoIndex]}
+                  alt="Child and ELLA"
+                  className="h-48 w-full rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="flex h-48 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
+                  No photo for this date.
+                </div>
+              )}
+              {photos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPhotoIndex((prev) => (prev - 1 + photos.length) % photos.length)
+                    }
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
+                    aria-label="Previous photo"
+                  >
+                    &lt;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoIndex((prev) => (prev + 1) % photos.length)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
+                    aria-label="Next photo"
+                  >
+                    &gt;
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="card p-5">
+            <p className="section-title">Themes</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {themes.map((theme) => (
+                <span
+                  key={theme}
+                  className="flex items-center gap-2 rounded-full border border-ink-200 bg-ink-100 px-3 py-1 text-sm"
+                >
+                  {theme}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTheme(theme)}
+                    className="text-ink-400 transition hover:text-ink-700 disabled:cursor-not-allowed disabled:text-ink-300"
+                    aria-label={`Remove ${theme}`}
+                    disabled={savingThemes}
+                  >
+                    −
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <input
+                value={themeDraft}
+                onChange={(event) => setThemeDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAddTheme();
                   }
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
-                  aria-label="Previous photo"
-                >
-                  &lt;
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPhotoIndex((prev) => (prev + 1) % photos.length)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-2xl font-light text-ink-500 transition hover:text-ink-700"
-                  aria-label="Next photo"
-                >
-                  &gt;
-                </button>
-              </>
-            )}
-          </div>
-        </section>
+                }}
+                className="input flex-1"
+                placeholder="Add a theme"
+                disabled={savingThemes}
+              />
+              <button
+                type="button"
+                className={`btn-ghost h-10 w-24 shrink-0 px-4 py-0 ${!themeDraft.trim() || savingThemes ? "opacity-50" : ""}`}
+                disabled={!themeDraft.trim() || savingThemes}
+                onClick={handleAddTheme}
+              >
+                Add
+              </button>
+            </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                className={`btn-primary h-11 w-full px-4 py-0 ${!isThemeDirty || savingThemes ? "opacity-50" : ""}`}
+                disabled={!isThemeDirty || savingThemes}
+                onClick={() => void saveThemes()}
+              >
+                {savingThemes ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {themeError && <p className="mt-3 text-sm text-red-500">{themeError}</p>}
+          </section>
+        </>
       )}
 
     </div>
