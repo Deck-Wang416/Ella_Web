@@ -243,6 +243,16 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
+    window.__ellaDashboardDirty = shouldProtectThemeChanges;
+  }, [shouldProtectThemeChanges]);
+
+  useEffect(() => {
+    return () => {
+      window.__ellaDashboardDirty = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (activeCondition === "robot") return;
     setThemeDraft("");
     setThemeError("");

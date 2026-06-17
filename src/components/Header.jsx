@@ -68,7 +68,7 @@ export default function Header({ active, username, onLogout, onOpenProfile }) {
               <button
                 type="button"
                 onClick={async () => {
-                  if (window.__ellaDiaryDirty) {
+                  if (window.__ellaDiaryDirty || window.__ellaDashboardDirty) {
                     const confirmed = window.confirm(
                       "You have unsaved changes. If you leave now, new changes will be lost."
                     );
