@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useBeforeUnload } from "react-router-dom";
-import DatePicker from "../components/DatePicker.jsx";
 import {
   formatTodayDate,
   getDailyByDate,
-  listDailySummaries,
   ApiError,
 } from "../lib/dailyApi.js";
 import ParentAudioRecorder from "../components/ParentAudioRecorder.jsx";
@@ -16,14 +14,11 @@ import { updateProfileByCaregiver } from "../lib/profileApi.js";
 export default function Dashboard() {
   const { caregiverId } = useCaregiver();
   const { loadingProfile, profile, profileError, profileStatus, refreshProfile } = useProfile();
-  const [summaries, setSummaries] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [dailyData, setDailyData] = useState(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [errorText, setErrorText] = useState("");
-  const [loadingSummaries, setLoadingSummaries] = useState(true);
   const [loadingDaily, setLoadingDaily] = useState(true);
-  const [recorderBusy, setRecorderBusy] = useState(false);
   const [themes, setThemes] = useState([]);
   const [savedThemes, setSavedThemes] = useState([]);
   const [themeDraft, setThemeDraft] = useState("");
@@ -34,49 +29,15 @@ export default function Dashboard() {
     profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active";
   const isThemeDirty = JSON.stringify(themes) !== JSON.stringify(savedThemes);
 
-  const availableDates = useMemo(
-    () => (
-      [...new Set([
-        ...summaries.filter((item) => item.dashboardSelectable).map((item) => item.date),
-        today,
-      ])]
-    ),
-    [summaries, today]
-  );
-
   useEffect(() => {
     if (!isActivePeriod) {
-      setSummaries([]);
       setSelectedDate(today);
       setDailyData(null);
-      setLoadingSummaries(false);
       setLoadingDaily(false);
       setErrorText("");
       return;
     }
-
-    let cancelled = false;
-
-    async function init() {
-      setLoadingSummaries(true);
-      try {
-        const list = await listDailySummaries(caregiverId);
-        if (cancelled) return;
-        setSummaries(list);
-        setSelectedDate(today);
-        setErrorText("");
-      } catch (error) {
-        if (cancelled) return;
-        setErrorText("Failed to load date list.");
-      } finally {
-        if (!cancelled) setLoadingSummaries(false);
-      }
-    }
-
-    init();
-    return () => {
-      cancelled = true;
-    };
+    setSelectedDate(today);
   }, [caregiverId, isActivePeriod, today]);
 
   useEffect(() => {
@@ -148,22 +109,6 @@ export default function Dashboard() {
     }, 5000);
     return () => clearInterval(timer);
   }, [photos.length]);
-
-  function confirmRecorderLeave(message) {
-    if (!recorderBusy) return true;
-    return window.confirm(message);
-  }
-
-  function confirmThemeLeave(message) {
-    if (!shouldProtectThemeChanges) return true;
-    return window.confirm(message);
-  }
-
-  function discardUnsavedThemeChanges() {
-    setThemes(savedThemes);
-    setThemeDraft("");
-    setThemeError("");
-  }
 
   function handleRemoveTheme(themeToRemove) {
     if (activeCondition !== "robot") return;
@@ -289,7 +234,7 @@ export default function Dashboard() {
 
   return (
     <div className="relative grid gap-6">
-      {(loadingSummaries || loadingDaily) && (
+      {loadingDaily && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/65 backdrop-blur-[1px]">
           <div className="rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg">
             Loading...
@@ -298,24 +243,12 @@ export default function Dashboard() {
       )}
 
       <section>
-        <DatePicker
-          label="Date"
-          selectedDate={selectedDate}
-          onChange={(nextDate) => {
-            if (!confirmRecorderLeave("Recording is still in progress. If you switch date now, the current recording may stop before it finishes uploading. Continue?")) {
-              return;
-            }
-            if (!confirmThemeLeave("You have unsaved theme changes. If you switch date, new changes will be lost.")) {
-              return;
-            }
-            if (shouldProtectThemeChanges) {
-              discardUnsavedThemeChanges();
-            }
-            setSelectedDate(nextDate);
-          }}
-          availableDates={availableDates}
-          showHelperText={false}
-        />
+        <div className="grid gap-3">
+          <p className="section-title">Date</p>
+          <div className="flex items-center justify-between rounded-2xl border border-ink-200 bg-white px-4 py-3 text-left shadow-sm">
+            <span className="font-display text-lg">{formatDisplayDate(selectedDate)}</span>
+          </div>
+        </div>
       </section>
 
       {errorText && (
@@ -330,7 +263,6 @@ export default function Dashboard() {
             caregiverId={caregiverId}
             date={selectedDate}
             enabled
-            onRecorderBusyChange={setRecorderBusy}
           />
           <section className="card p-5">
             <p className="section-title">Book for today</p>
@@ -486,6 +418,20 @@ function WeeklyProgressCard({ condition, weeklyProgress }) {
       </div>
     </section>
   );
+}
+
+function formatDisplayDate(selectedDate) {
+  if (!selectedDate) return "No date available";
+
+  return new Date(
+    Number(selectedDate.slice(0, 4)),
+    Number(selectedDate.slice(5, 7)) - 1,
+    Number(selectedDate.slice(8, 10))
+  ).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function hasMetWeeklyTarget(currentValue, targetValue) {
