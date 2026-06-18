@@ -401,11 +401,11 @@ export default function Dashboard() {
                   <button
                     type="button"
                     onClick={() => handleRemoveTheme(theme)}
-                    className="text-ink-400 transition hover:text-ink-700 disabled:cursor-not-allowed disabled:text-ink-300"
+                    className="rounded-full text-red-500 transition hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-300"
                     aria-label={`Remove ${theme}`}
                     disabled={savingThemes}
                   >
-                    −
+                    ×
                   </button>
                 </span>
               ))}
