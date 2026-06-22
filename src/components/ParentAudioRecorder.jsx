@@ -188,10 +188,18 @@ export default function ParentAudioRecorder({
 
     while (pendingBlobsRef.current.length > 0) {
       if (!sessionIdRef.current) {
-        uploadLoopRunningRef.current = false;
-        setUploading(false);
-        setRecorderError("Unable to start recording. Please try again.");
-        return;
+        try {
+          await ensureSession();
+        } catch (error) {
+          uploadLoopRunningRef.current = false;
+          setUploading(false);
+          const fallback =
+            error instanceof ApiError && error.status >= 500
+              ? "Service is temporarily unavailable. Please try again later."
+              : "Unable to start recording. Please try again.";
+          setRecorderError(fallback);
+          return;
+        }
       }
 
       const blob = pendingBlobsRef.current[0];
@@ -313,11 +321,6 @@ export default function ParentAudioRecorder({
     let recorder = null;
 
     try {
-      await ensureSession();
-      if (!sessionIdRef.current) {
-        throw new Error("Missing recording session id.");
-      }
-
       setElapsedSeconds(0);
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = pickSupportedMimeType();
