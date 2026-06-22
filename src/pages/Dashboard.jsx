@@ -88,7 +88,6 @@ export default function Dashboard() {
   const activeCondition = dailyData?.condition || "robot";
   const dashboard = dailyData?.dashboard || {};
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
-  const book = activeCondition === "parent" ? dashboard.book || null : null;
   const weeklyProgress = dashboard.weeklyProgress || null;
   const shouldProtectThemeChanges = activeCondition === "robot" && isThemeDirty;
 
@@ -264,14 +263,6 @@ export default function Dashboard() {
             date={selectedDate}
             enabled
           />
-          <section className="card p-5">
-            <p className="section-title">Book for today</p>
-            <div className="mt-4">
-              <div className="inline-flex rounded-full border border-ink-200 bg-ink-100 px-3 py-1 text-sm">
-              {book || "No book recorded for this date."}
-              </div>
-            </div>
-          </section>
         </>
       ) : (
         <>
