@@ -85,6 +85,39 @@ export default function Dashboard() {
     };
   }, [caregiverId, isActivePeriod, selectedDate]);
 
+  useEffect(() => {
+    async function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      if (!isActivePeriod || !selectedDate) return;
+
+      setLoadingDaily(true);
+      try {
+        const json = await getDailyByDate(selectedDate, caregiverId);
+        setDailyData(json);
+        setPhotoIndex(0);
+        setErrorText("");
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          setDailyData(null);
+          setErrorText("No dashboard record for this date.");
+          return;
+        }
+        if (error instanceof ApiError && error.status >= 500) {
+          setErrorText("Service is temporarily unavailable. Please try again later.");
+          return;
+        }
+        setErrorText("Failed to load dashboard data.");
+      } finally {
+        setLoadingDaily(false);
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [caregiverId, isActivePeriod, selectedDate]);
+
   const activeCondition = dailyData?.condition || "robot";
   const dashboard = dailyData?.dashboard || {};
   const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
