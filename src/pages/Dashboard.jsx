@@ -28,6 +28,7 @@ export default function Dashboard() {
   const isActivePeriod =
     profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active";
   const isThemeDirty = JSON.stringify(themes) !== JSON.stringify(savedThemes);
+  const hasValidThemeCount = themes.length >= 5 && themes.length <= 15;
 
   useEffect(() => {
     if (!isActivePeriod) {
@@ -146,6 +147,7 @@ export default function Dashboard() {
     if (activeCondition !== "robot") return;
     const confirmed = window.confirm(`Remove "${themeToRemove}" from themes?`);
     if (!confirmed) return;
+    setThemeError("");
     setThemes((current) => current.filter((theme) => theme !== themeToRemove));
   }
 
@@ -153,6 +155,7 @@ export default function Dashboard() {
     if (activeCondition !== "robot") return;
     const nextTheme = themeDraft.trim();
     if (!nextTheme) return;
+    setThemeError("");
     setThemes((current) => (current.includes(nextTheme) ? current : [...current, nextTheme]));
     setThemeDraft("");
   }
@@ -161,6 +164,10 @@ export default function Dashboard() {
     if (activeCondition !== "robot") return;
     if (!caregiverId) {
       setThemeError("Unable to save themes right now.");
+      return;
+    }
+    if (!hasValidThemeCount) {
+      setThemeError("Please keep 5 to 15 story themes.");
       return;
     }
 
@@ -346,7 +353,14 @@ export default function Dashboard() {
           </section>
 
           <section className="card p-5">
-            <p className="section-title">Themes</p>
+            <p className="section-title">Story Themes</p>
+            <div className="mt-3 grid gap-1 text-sm text-ink-500">
+              <p>
+                Example story themes: Mickey Mouse (character from Disney), My Neighbor
+                Totoro (movie), Humpty Dumpty (story)
+              </p>
+              <p>Please keep 5 to 15 story themes.</p>
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {themes.map((theme) => (
                 <span
@@ -392,8 +406,8 @@ export default function Dashboard() {
             <div className="mt-4">
               <button
                 type="button"
-                className={`btn-primary h-11 w-full px-4 py-0 ${!isThemeDirty || savingThemes ? "opacity-50" : ""}`}
-                disabled={!isThemeDirty || savingThemes}
+                className={`btn-primary h-11 w-full px-4 py-0 ${!isThemeDirty || savingThemes || !hasValidThemeCount ? "opacity-50" : ""}`}
+                disabled={!isThemeDirty || savingThemes || !hasValidThemeCount}
                 onClick={() => void saveThemes()}
               >
                 {savingThemes ? "Saving..." : "Save"}
