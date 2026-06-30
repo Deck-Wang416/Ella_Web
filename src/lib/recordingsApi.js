@@ -56,7 +56,7 @@ export async function uploadRecordingChunk(sessionId, chunkIndex, blob) {
   });
 }
 
-export async function completeRecordingSession(sessionId, finalChunkIndex) {
+export async function completeRecordingSession(sessionId, finalChunkIndex, durationSeconds) {
   return requestJson(`${API_BASE}/recordings/sessions/${encodeURIComponent(sessionId)}/complete`, {
     method: "POST",
     headers: {
@@ -64,6 +64,7 @@ export async function completeRecordingSession(sessionId, finalChunkIndex) {
     },
     body: JSON.stringify({
       finalChunkIndex,
+      durationSeconds,
     }),
   });
 }

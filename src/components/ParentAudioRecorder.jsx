@@ -16,6 +16,11 @@ function formatElapsed(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
+function getElapsedSecondsFromStart(startTimestamp) {
+  if (!startTimestamp) return 0;
+  return Math.max(0, Math.floor((Date.now() - startTimestamp) / 1000));
+}
+
 function pickSupportedMimeType() {
   const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", ""];
   if (typeof MediaRecorder === "undefined") return "";
@@ -403,7 +408,12 @@ export default function ParentAudioRecorder({
         return;
       }
 
-      await completeRecordingSession(sessionIdRef.current, lastUploadedChunkIndexRef.current);
+      const durationSeconds = getElapsedSecondsFromStart(startTimestampRef.current);
+      await completeRecordingSession(
+        sessionIdRef.current,
+        lastUploadedChunkIndexRef.current,
+        durationSeconds
+      );
 
       setSessionStatus("completed");
       setCompletedDate(date);
