@@ -123,7 +123,7 @@ export default function Dashboard() {
   const dashboard = dailyData?.dashboard || {};
   const photos =
     activeCondition === "robot"
-      ? [...(dailyData?.dashboard?.photos || [])].slice(-5).reverse()
+      ? dashboard.recentPhotos || dailyData?.dashboard?.photos || []
       : [];
   const weeklyProgress = dashboard.weeklyProgress || null;
   const shouldProtectThemeChanges = activeCondition === "robot" && isThemeDirty;
