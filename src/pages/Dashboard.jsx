@@ -121,7 +121,10 @@ export default function Dashboard() {
 
   const activeCondition = dailyData?.condition || "robot";
   const dashboard = dailyData?.dashboard || {};
-  const photos = activeCondition === "robot" ? dailyData?.dashboard?.photos || [] : [];
+  const photos =
+    activeCondition === "robot"
+      ? [...(dailyData?.dashboard?.photos || [])].slice(-5).reverse()
+      : [];
   const weeklyProgress = dashboard.weeklyProgress || null;
   const shouldProtectThemeChanges = activeCondition === "robot" && isThemeDirty;
 
@@ -320,10 +323,10 @@ export default function Dashboard() {
                 <img
                   src={photos[photoIndex]}
                   alt="Child and ELLA"
-                  className="h-48 w-full rounded-2xl object-cover"
+                  className="max-h-[28rem] w-full rounded-2xl object-contain"
                 />
               ) : (
-                <div className="flex h-48 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
+                <div className="flex h-80 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
                   No photo for this date.
                 </div>
               )}
