@@ -157,14 +157,6 @@ export default function Dashboard() {
     setThemeError("");
   }, [isThemeDirty, themes]);
 
-  useEffect(() => {
-    if (photos.length <= 1) return;
-    const timer = setInterval(() => {
-      setPhotoIndex((prev) => (prev + 1) % photos.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [photos.length]);
-
   function handleRemoveTheme(themeToRemove) {
     if (activeCondition !== "robot") return;
     const confirmed = window.confirm(`Remove "${themeToRemove}" from themes?`);
