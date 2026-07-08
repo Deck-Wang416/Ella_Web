@@ -28,7 +28,7 @@ export default function Dashboard() {
   const isActivePeriod =
     profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active";
   const isThemeDirty = JSON.stringify(themes) !== JSON.stringify(savedThemes);
-  const hasValidThemeCount = themes.length >= 5 && themes.length <= 15;
+  const hasValidThemeCount = themes.length >= 3 && themes.length <= 15;
 
   useEffect(() => {
     if (!isActivePeriod) {
@@ -170,7 +170,7 @@ export default function Dashboard() {
       return;
     }
     if (!hasValidThemeCount) {
-      setThemeError("Please keep 5 to 15 story themes.");
+      setThemeError("Please keep 3 to 15 story themes.");
       return;
     }
 
@@ -362,7 +362,7 @@ export default function Dashboard() {
                 Example story themes: Mickey Mouse (character from Disney), My Neighbor
                 Totoro (movie), Humpty Dumpty (story)
               </p>
-              <p>Please keep 5 to 15 story themes.</p>
+              <p>Please keep 3 to 15 story themes.</p>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {themes.map((theme) => (
