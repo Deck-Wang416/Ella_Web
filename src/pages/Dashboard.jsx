@@ -342,7 +342,7 @@ export default function Dashboard() {
                 />
               ) : (
                 <div className="flex h-80 items-center justify-center rounded-2xl bg-ink-100 text-sm text-ink-500">
-                  No recent robot photos available.
+                  No recent photos available.
                 </div>
               )}
               {photos.length > 1 && (
