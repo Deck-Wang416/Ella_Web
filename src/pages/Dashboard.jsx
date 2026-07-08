@@ -139,6 +139,25 @@ export default function Dashboard() {
   }, [profile]);
 
   useEffect(() => {
+    if (!isThemeDirty) {
+      setThemeError("");
+      return;
+    }
+
+    if (themes.length < 3) {
+      setThemeError("Please keep at least 3 story themes.");
+      return;
+    }
+
+    if (themes.length > 15) {
+      setThemeError("Please keep no more than 15 story themes.");
+      return;
+    }
+
+    setThemeError("");
+  }, [isThemeDirty, themes]);
+
+  useEffect(() => {
     if (photos.length <= 1) return;
     const timer = setInterval(() => {
       setPhotoIndex((prev) => (prev + 1) % photos.length);
@@ -170,7 +189,11 @@ export default function Dashboard() {
       return;
     }
     if (!hasValidThemeCount) {
-      setThemeError("Please keep 3 to 15 story themes.");
+      setThemeError(
+        themes.length < 3
+          ? "Please keep at least 3 story themes."
+          : "Please keep no more than 15 story themes."
+      );
       return;
     }
 
