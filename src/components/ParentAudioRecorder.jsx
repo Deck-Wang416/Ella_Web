@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../lib/dailyApi.js";
 import { isNativeApp } from "../lib/platform.js";
+import NativeAudioRecorder from "./NativeAudioRecorder.jsx";
 import {
   completeRecordingSession,
   createRecordingSession,
@@ -34,7 +35,12 @@ function delay(ms) {
   });
 }
 
-export default function ParentAudioRecorder({
+export default function ParentAudioRecorder(props) {
+  if (isNativeApp) return <NativeAudioRecorder {...props} />;
+  return <WebAudioRecorder {...props} />;
+}
+
+function WebAudioRecorder({
   caregiverId,
   date,
   enabled = false,
@@ -67,7 +73,7 @@ export default function ParentAudioRecorder({
   const startTimestampRef = useRef(null);
   const wakeLockRef = useRef(null);
   const wakeLockRequestIdRef = useRef(0);
-  const canRecord = enabled && !isNativeApp;
+  const canRecord = enabled;
   const busyState = isRecording || uploading || isCompleting;
 
   useEffect(() => {
@@ -480,10 +486,6 @@ export default function ParentAudioRecorder({
             {isRecording ? "Stop" : "Start"}
           </span>
         </button>
-
-        {isNativeApp && (
-          <p className="text-sm text-ink-500">Recording is temporarily unavailable in the app.</p>
-        )}
 
         <div className="grid gap-1">
           <p className="font-display text-4xl">{formatElapsed(elapsedSeconds)}</p>

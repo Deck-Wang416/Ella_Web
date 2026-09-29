@@ -22,7 +22,9 @@ npx cap open ios
 
 `mobile:sync` builds with `https://hri-autism-backend.onrender.com/api` and copies the output into both native projects. To use another backend, set `ELLA_MOBILE_API_BASE` to an HTTPS URL ending in `/api` before running it. The native bundle ID is provisionally `com.ella.parentportal`.
 
-This first mobile build is for shell/login/API testing. Background recording and native push are not implemented yet; do not use it for study recordings.
+On iOS, parent-mode recording now has a local-only native prototype. It writes an M4A file in the app's private storage and can play or delete the latest saved file. It does not upload audio or update recording sessions/weekly progress yet; do not use this build for study recordings. Android native recording and native push are not implemented.
+
+To validate background recording, run the app on a physical iPhone with an account in an active parent period. Record speech, press Home, lock the phone, and switch apps while recording; return, stop, and play the saved file. Check that speech from each interval is present. Also check that an incoming call is reported as an interruption rather than silently claiming the recording is complete. Simulator results alone are not sufficient for this test.
 
 ## Env
 
