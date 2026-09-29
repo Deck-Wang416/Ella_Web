@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useCaregiver } from "./CaregiverContext.jsx";
 import { deriveProfileStatus, getProfileByCaregiver } from "../lib/profileApi.js";
 
@@ -15,8 +15,10 @@ export function ProfileProvider({ children }) {
   const [profile, setProfile] = useState(sessionProfile);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState("");
+  const requestVersion = useRef(0);
 
   async function refreshProfile() {
+    const version = ++requestVersion.current;
     if (!isAuthenticated || !caregiverId) {
       setProfile(null);
       setProfileError("");
@@ -27,10 +29,12 @@ export function ProfileProvider({ children }) {
     setLoadingProfile(true);
     try {
       const data = await getProfileByCaregiver(caregiverId);
+      if (version !== requestVersion.current) return;
       setProfile(data);
       updateProfileSnapshot(data);
       setProfileError("");
     } catch (error) {
+      if (version !== requestVersion.current) return;
       setProfile(null);
       if (error?.status === 404) {
         setProfileError("");
@@ -38,9 +42,13 @@ export function ProfileProvider({ children }) {
         setProfileError(error.message || "Failed to load profile.");
       }
     } finally {
-      setLoadingProfile(false);
+      if (version === requestVersion.current) setLoadingProfile(false);
     }
   }
+
+  useEffect(() => () => {
+    requestVersion.current += 1;
+  }, []);
 
   useEffect(() => {
     if (sessionProfile) {

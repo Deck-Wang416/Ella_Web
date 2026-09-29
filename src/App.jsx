@@ -13,10 +13,15 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+function AccountProfileProvider({ children }) {
+  const { caregiverId } = useCaregiver();
+  return <ProfileProvider key={caregiverId ?? "guest"}>{children}</ProfileProvider>;
+}
+
 export default function App() {
   return (
     <CaregiverProvider>
-      <ProfileProvider>
+      <AccountProfileProvider>
         <div className="app-shell">
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
@@ -44,7 +49,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </div>
-      </ProfileProvider>
+      </AccountProfileProvider>
     </CaregiverProvider>
   );
 }
