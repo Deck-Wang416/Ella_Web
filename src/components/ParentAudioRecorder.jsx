@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "../lib/dailyApi.js";
+import { isNativeApp } from "../lib/platform.js";
 import {
   completeRecordingSession,
   createRecordingSession,
@@ -66,6 +67,7 @@ export default function ParentAudioRecorder({
   const startTimestampRef = useRef(null);
   const wakeLockRef = useRef(null);
   const wakeLockRequestIdRef = useRef(0);
+  const canRecord = enabled && !isNativeApp;
   const busyState = isRecording || uploading || isCompleting;
 
   useEffect(() => {
@@ -315,7 +317,7 @@ export default function ParentAudioRecorder({
   }
 
   async function startRecording() {
-    if (!enabled || isRecordingRef.current || isCompleting || uploading) return;
+    if (!canRecord || isRecordingRef.current || isCompleting || uploading) return;
     setRecorderError("");
     setUploadError("");
     setWakeLockMessage("");
@@ -452,9 +454,9 @@ export default function ParentAudioRecorder({
   }, [isCompleting, lastUploadedChunkIndex, uploading, uploadError]);
 
   const buttonAriaLabel = useMemo(() => {
-    if (!enabled) return "Recording unavailable";
+    if (!canRecord) return "Recording unavailable";
     return isRecording ? "Stop recording" : "Start recording";
-  }, [enabled, isRecording]);
+  }, [canRecord, isRecording]);
 
   return (
     <section className="card p-5">
@@ -466,18 +468,22 @@ export default function ParentAudioRecorder({
         <button
           type="button"
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={!enabled || uploading || isCompleting}
+          disabled={!canRecord || uploading || isCompleting}
           className={`flex h-36 w-36 items-center justify-center rounded-full border-8 transition ${
             isRecording
               ? "border-red-200 bg-red-500 text-white hover:bg-red-600"
               : "border-brand-200 bg-brand-500 text-white hover:bg-brand-600"
-          } ${!enabled || uploading || isCompleting ? "cursor-not-allowed opacity-50" : ""}`}
+          } ${!canRecord || uploading || isCompleting ? "cursor-not-allowed opacity-50" : ""}`}
           aria-label={buttonAriaLabel}
         >
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-base font-semibold">
             {isRecording ? "Stop" : "Start"}
           </span>
         </button>
+
+        {isNativeApp && (
+          <p className="text-sm text-ink-500">Recording is temporarily unavailable in the app.</p>
+        )}
 
         <div className="grid gap-1">
           <p className="font-display text-4xl">{formatElapsed(elapsedSeconds)}</p>

@@ -4,7 +4,9 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import "./index.css";
 import { registerServiceWorker } from "./lib/serviceWorker.js";
+import { isNativeApp } from "./lib/platform.js";
 
+if (isNativeApp) document.documentElement.classList.add("native-app");
 registerServiceWorker();
 
 createRoot(document.getElementById("root")).render(

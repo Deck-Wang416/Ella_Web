@@ -6,6 +6,7 @@ import { useWebPushSubscription } from "../hooks/useWebPushSubscription.js";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { deactivateStoredSubscription } from "../lib/webPushApi.js";
 import { useProfile } from "../context/ProfileContext.jsx";
+import { isNativeApp } from "../lib/platform.js";
 
 export default function AppLayout({ active, children }) {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -13,6 +14,7 @@ export default function AppLayout({ active, children }) {
   const { loadingProfile, profileStatus, profile } = useProfile();
   const displayUsername = profile?.username || username;
   const reminderEnabled =
+    !isNativeApp &&
     import.meta.env.VITE_ENABLE_LOCAL_REMINDER === "true" &&
     !loadingProfile &&
     (profileStatus?.key === "robot-active" || profileStatus?.key === "parent-active");

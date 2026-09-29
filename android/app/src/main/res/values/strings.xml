@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ELLA</string>
+    <string name="title_activity_main">ELLA</string>
+    <string name="package_name">com.ella.parentportal</string>
+    <string name="custom_url_scheme">com.ella.parentportal</string>
+</resources>

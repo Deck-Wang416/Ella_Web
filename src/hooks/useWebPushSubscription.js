@@ -4,10 +4,12 @@ import {
   upsertWebPushSubscription,
   urlBase64ToUint8Array,
 } from "../lib/webPushApi.js";
+import { isNativeApp } from "../lib/platform.js";
 
 const PUBLIC_KEY = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY || "";
 
 export async function ensureWebPushSubscription(caregiverId) {
+  if (isNativeApp) return null;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     throw new Error("Web Push is not supported in this browser.");
   }

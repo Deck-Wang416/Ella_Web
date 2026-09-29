@@ -1,6 +1,6 @@
-# ELLA Web
+# ELLA
 
-React + Vite + Tailwind frontend for the ELLA parent portal / PWA.
+React + Vite + Tailwind frontend for the ELLA web/PWA and Capacitor mobile app.
 
 ## Run
 
@@ -8,6 +8,21 @@ React + Vite + Tailwind frontend for the ELLA parent portal / PWA.
 npm install
 npm run dev
 ```
+
+## Mobile shell
+
+Requires Node 22 (`nvm use`), Xcode for iOS, and Android Studio/SDK for Android.
+
+```bash
+npm install
+npm run mobile:sync
+npx cap open ios
+# or: npx cap open android
+```
+
+`mobile:sync` builds with `https://hri-autism-backend.onrender.com/api` and copies the output into both native projects. To use another backend, set `ELLA_MOBILE_API_BASE` to an HTTPS URL ending in `/api` before running it. The native bundle ID is provisionally `com.ella.parentportal`.
+
+This first mobile build is for shell/login/API testing. Background recording and native push are not implemented yet; do not use it for study recordings.
 
 ## Env
 

@@ -14,6 +14,11 @@ body {
   @apply min-h-screen bg-gradient-to-br from-white via-white to-ink-100;
 }
 
+.native-app .app-shell {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 .card {
   @apply bg-white rounded-3xl shadow-card border border-ink-100;
 }
