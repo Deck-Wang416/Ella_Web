@@ -10,6 +10,7 @@ import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { useProfile } from "../context/ProfileContext.jsx";
 import ExperimentBlockedState from "../components/ExperimentBlockedState.jsx";
 import { updateProfileByCaregiver } from "../lib/profileApi.js";
+import { subscribeNativeRecordingSync } from "../lib/nativeRecordingSync.js";
 
 export default function Dashboard() {
   const { caregiverId } = useCaregiver();
@@ -116,6 +117,23 @@ export default function Dashboard() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [caregiverId, isActivePeriod, selectedDate]);
+
+  useEffect(() => {
+    if (!isActivePeriod || !selectedDate) return undefined;
+    let cancelled = false;
+    const unsubscribe = subscribeNativeRecordingSync((id, state) => {
+      if (id !== caregiverId || !state.completedId) return;
+      void getDailyByDate(selectedDate, caregiverId).then((json) => {
+        if (!cancelled) setDailyData(json);
+      }).catch(() => {
+        // The normal page refresh can retry a failed progress update.
+      });
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
   }, [caregiverId, isActivePeriod, selectedDate]);
 

@@ -30,7 +30,6 @@ export default function AppLayout({ active, children }) {
           if (!window.confirm("Stop and save the recording before logging out?")) return;
           await NativeAudio.stop({ caregiverId });
         }
-        await NativeAudio.stopPlayback();
       } catch {
         window.alert("Unable to save the recording. Please try again before logging out.");
         return;

@@ -6,6 +6,7 @@ import AppLayout from "./components/AppLayout.jsx";
 import { CaregiverProvider } from "./context/CaregiverContext.jsx";
 import { useCaregiver } from "./context/CaregiverContext.jsx";
 import { ProfileProvider } from "./context/ProfileContext.jsx";
+import { useNativeRecordingSync } from "./hooks/useNativeRecordingSync.js";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useCaregiver();
@@ -18,9 +19,16 @@ function AccountProfileProvider({ children }) {
   return <ProfileProvider key={caregiverId ?? "guest"}>{children}</ProfileProvider>;
 }
 
+function NativeRecordingSync() {
+  const { caregiverId } = useCaregiver();
+  useNativeRecordingSync(caregiverId);
+  return null;
+}
+
 export default function App() {
   return (
     <CaregiverProvider>
+      <NativeRecordingSync />
       <AccountProfileProvider>
         <div className="app-shell">
           <Routes>

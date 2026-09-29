@@ -24,9 +24,10 @@ async function requestJson(url, options) {
   return data;
 }
 
-export async function createRecordingSession(date, caregiverId) {
+export async function createRecordingSession(date, caregiverId, options = {}) {
   return requestJson(`${API_BASE}/recordings/sessions`, {
     method: "POST",
+    signal: options.signal,
     headers: {
       "Content-Type": "application/json",
     },
@@ -38,7 +39,13 @@ export async function createRecordingSession(date, caregiverId) {
   });
 }
 
-export async function uploadRecordingChunk(sessionId, chunkIndex, blob) {
+export async function getRecordingSession(sessionId, options = {}) {
+  return requestJson(`${API_BASE}/recordings/sessions/${encodeURIComponent(sessionId)}`, {
+    signal: options.signal,
+  });
+}
+
+export async function uploadRecordingChunk(sessionId, chunkIndex, blob, options = {}) {
   if (!sessionId) {
     throw new Error("Missing recording session id.");
   }
@@ -49,6 +56,7 @@ export async function uploadRecordingChunk(sessionId, chunkIndex, blob) {
 
   return requestJson(url, {
     method: "POST",
+    signal: options.signal,
     headers: {
       "Content-Type": mimeType,
     },
@@ -56,9 +64,10 @@ export async function uploadRecordingChunk(sessionId, chunkIndex, blob) {
   });
 }
 
-export async function completeRecordingSession(sessionId, finalChunkIndex, durationSeconds) {
+export async function completeRecordingSession(sessionId, finalChunkIndex, durationSeconds, options = {}) {
   return requestJson(`${API_BASE}/recordings/sessions/${encodeURIComponent(sessionId)}/complete`, {
     method: "POST",
+    signal: options.signal,
     headers: {
       "Content-Type": "application/json",
     },

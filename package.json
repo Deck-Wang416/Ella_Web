@@ -11,6 +11,7 @@
     "build": "vite build",
     "build:mobile": "VITE_API_BASE=${ELLA_MOBILE_API_BASE:-https://hri-autism-backend.onrender.com/api} vite build",
     "mobile:sync": "npm run build:mobile && cap sync",
+    "test": "node --test",
     "preview": "vite preview"
   },
   "dependencies": {
