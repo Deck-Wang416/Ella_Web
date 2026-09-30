@@ -32,7 +32,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     setStatus(next.status);
     setElapsedSeconds(Math.floor(next.elapsedSeconds ?? 0));
     if (next.recording) setLatestRecording(next.recording);
-    else if (next.latestRecording !== undefined) setLatestRecording(next.latestRecording ?? null);
+    else if (next.status !== "recording") setLatestRecording(next.latestRecording ?? null);
     if (next.status === "interrupted") {
       setError(next.recording || next.latestRecording
         ? ""

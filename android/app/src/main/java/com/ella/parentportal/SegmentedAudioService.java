@@ -40,10 +40,13 @@ public class SegmentedAudioService extends Service {
     private static final int SEGMENT_BYTES = BYTES_PER_SECOND * 3;
 
     private static volatile String activeId;
+    private static volatile String readyId;
+    private static volatile String failedStartId;
     private static volatile int activeCaregiver;
     private static volatile long startedAt;
     private static volatile String lastError;
     private static volatile int lastErrorCaregiver;
+    private static volatile String lastErrorId;
     private volatile boolean stopRequested;
     private AudioRecord recorder;
     private Thread captureThread;
@@ -57,8 +60,23 @@ public class SegmentedAudioService extends Service {
     }
 
     static boolean hasActiveRecording() { return activeId != null; }
+    static boolean isReady(String id) { return id != null && id.equals(readyId); }
+    static boolean startFailed(String id) { return id != null && id.equals(failedStartId); }
     static boolean wasInterrupted(int caregiverId) {
         return lastError != null && lastErrorCaregiver == caregiverId;
+    }
+    static String interruptedRecordingId(int caregiverId) {
+        return wasInterrupted(caregiverId) ? lastErrorId : null;
+    }
+    static String interruptionError(int caregiverId) {
+        return wasInterrupted(caregiverId) ? lastError : null;
+    }
+    static void clearInterruption(int caregiverId, String id) {
+        if (wasInterrupted(caregiverId) && id != null && id.equals(lastErrorId)) {
+            lastError = null;
+            lastErrorCaregiver = 0;
+            lastErrorId = null;
+        }
     }
 
     static double elapsedSeconds(int caregiverId) {
@@ -96,6 +114,8 @@ public class SegmentedAudioService extends Service {
         stopRequested = false;
         lastError = null;
         lastErrorCaregiver = 0;
+        lastErrorId = null;
+        failedStartId = null;
         activeId = id;
         activeCaregiver = caregiverId;
         startedAt = SystemClock.elapsedRealtime();
@@ -131,6 +151,7 @@ public class SegmentedAudioService extends Service {
                 AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuffer * 2, 8192));
             if (recorder.getState() != AudioRecord.STATE_INITIALIZED) throw new IOException("Microphone failed to initialize");
             recorder.startRecording();
+            readyId = id;
             byte[] buffer = new byte[8192];
             while (!stopRequested) {
                 int count = recorder.read(buffer, 0, buffer.length);
@@ -168,6 +189,8 @@ public class SegmentedAudioService extends Service {
             Log.e("ELLA", "Recording stopped unexpectedly", error);
             lastError = error.getMessage() == null ? "Microphone recording stopped" : error.getMessage();
             lastErrorCaregiver = caregiverId;
+            lastErrorId = id;
+            failedStartId = id;
             try {
                 if (current != null) {
                     if (written > 0 && directory != null) closeSegment(current, currentFile, written, directory);
@@ -188,6 +211,7 @@ public class SegmentedAudioService extends Service {
                 recorder = null;
             }
             activeId = null;
+            readyId = null;
             activeCaregiver = 0;
             startedAt = 0;
             stopForeground(STOP_FOREGROUND_REMOVE);

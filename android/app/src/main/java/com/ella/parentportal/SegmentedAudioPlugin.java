@@ -70,10 +70,31 @@ public class SegmentedAudioPlugin extends Plugin {
         intent.putExtra(SegmentedAudioService.EXTRA_DATE, call.getString("date"));
         try {
             ContextCompat.startForegroundService(getContext(), intent);
-            JSObject result = new JSObject();
-            result.put("status", "recording");
-            call.resolve(result);
-            notifyListeners("recordingStateChanged", result);
+            new Thread(() -> {
+                try {
+                    for (int attempt = 0; attempt < 100; attempt++) {
+                        if (SegmentedAudioService.startFailed(id)) break;
+                        if (SegmentedAudioService.isReady(id)) {
+                            JSObject result = new JSObject();
+                            result.put("status", "recording");
+                            call.resolve(result);
+                            notifyListeners("recordingStateChanged", result);
+                            return;
+                        }
+                        Thread.sleep(100);
+                    }
+                    // A slow service may still start after the wait expires; stop only this attempt.
+                    Intent stop = new Intent(getContext(), SegmentedAudioService.class);
+                    stop.setAction(SegmentedAudioService.ACTION_STOP);
+                    stop.putExtra(SegmentedAudioService.EXTRA_ID, id);
+                    stop.putExtra(SegmentedAudioService.EXTRA_CAREGIVER, caregiver(call));
+                    try { getContext().startService(stop); } catch (Exception ignored) {}
+                    call.reject("Unable to start recording. Please try again.");
+                } catch (InterruptedException error) {
+                    Thread.currentThread().interrupt();
+                    call.reject("Unable to start recording. Please try again.");
+                }
+            }, "EllaRecordingStart").start();
         } catch (Exception error) {
             call.reject("Unable to start recording.", null, error);
         }
@@ -119,15 +140,19 @@ public class SegmentedAudioPlugin extends Plugin {
             result.put("status", "recording");
             result.put("elapsedSeconds", SegmentedAudioService.elapsedSeconds(caregiverId));
         } else {
-            result.put("status", SegmentedAudioService.wasInterrupted(caregiverId) ? "interrupted" : "idle");
+            boolean interrupted = SegmentedAudioService.wasInterrupted(caregiverId);
+            result.put("status", interrupted ? "interrupted" : "idle");
             result.put("elapsedSeconds", 0);
+            if (interrupted) result.put("error", SegmentedAudioService.interruptionError(caregiverId));
             try {
                 List<File> folders = SegmentStore.directories(getContext(), caregiverId);
                 for (int index = folders.size() - 1; index >= 0; index--) {
                     try {
                         JSONObject manifest = SegmentStore.read(folders.get(index));
                         if (manifest.optInt("segmentCount") <= 0 || manifest.optBoolean("uploaded")) continue;
-                        result.put("status", SegmentedAudioService.wasInterrupted(caregiverId) ? "interrupted" : "saved");
+                        if (interrupted && !manifest.optString("id").equals(
+                            SegmentedAudioService.interruptedRecordingId(caregiverId))) continue;
+                        result.put("status", interrupted ? "interrupted" : "saved");
                         result.put("elapsedSeconds", manifest.optDouble("durationSeconds"));
                         result.put("latestRecording", SegmentStore.summary(manifest));
                         break;
@@ -151,7 +176,10 @@ public class SegmentedAudioPlugin extends Plugin {
                     try {
                         JSONObject manifest = SegmentStore.read(directory);
                         if (manifest.optBoolean("uploaded")) {
-                            try { SegmentStore.deleteTree(directory); }
+                            try {
+                                SegmentStore.deleteTree(directory);
+                                SegmentedAudioService.clearInterruption(caregiverId, manifest.optString("id"));
+                            }
                             catch (IOException error) { cleanupFailures++; }
                             continue;
                         }
@@ -283,6 +311,7 @@ public class SegmentedAudioPlugin extends Plugin {
                 manifest.put("uploaded", true);
                 SegmentStore.write(directory, manifest);
                 SegmentStore.deleteTree(directory);
+                SegmentedAudioService.clearInterruption(caregiver(call), manifest.optString("id"));
                 call.resolve();
             } catch (Exception error) { call.reject(error.getMessage(), null, error); }
         }
@@ -302,6 +331,7 @@ public class SegmentedAudioPlugin extends Plugin {
                 manifest.put("uploaded", true);
                 SegmentStore.write(directory, manifest);
                 SegmentStore.deleteTree(directory);
+                SegmentedAudioService.clearInterruption(caregiver(call), manifest.optString("id"));
                 call.resolve();
             } catch (Exception error) { call.reject(error.getMessage(), null, error); }
         }
