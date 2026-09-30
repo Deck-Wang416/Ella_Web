@@ -320,9 +320,9 @@ public class NativeAudioPlugin: CAPPlugin, CAPBridgedPlugin, AVAudioRecorderDele
             guard let self, let target = self.uploadTarget(call) else { return }
             var (manifest, url) = target
             do {
-                guard manifest.sessionId == call.getString("sessionId"),
-                      let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber,
-                      manifest.uploadedBytes == size.int64Value else {
+                // Verified server-side merge is authoritative; a crash may have lost the final
+                // local byte acknowledgement after the server accepted the upload.
+                guard manifest.sessionId == call.getString("sessionId") else {
                     throw self.uploadError("Audio upload is incomplete.")
                 }
                 // Persist the server-confirmed state first, so an interrupted deletion can resume on the next scan.

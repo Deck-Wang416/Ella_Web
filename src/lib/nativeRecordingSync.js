@@ -1,4 +1,6 @@
 import { NativeAudio, nativeAudioSupported } from "./nativeAudioApi.js";
+import { SegmentedAudio } from "./nativeSegmentedAudioApi.js";
+import { Capacitor } from "@capacitor/core";
 import * as recordingsApi from "./recordingsApi.js";
 import { transferNativeRecording } from "./nativeRecordingTransfer.js";
 
@@ -40,25 +42,40 @@ export async function syncNativeRecordings(caregiverId) {
   const entry = { controller, promise: null, rerunRequested: false };
   const promise = (async () => {
     try {
-      const { recordings, unreadableCount = 0, cleanupFailureCount = 0 } = await NativeAudio.getPendingUploads({ caregiverId });
+      const current = await SegmentedAudio.getPendingUploads({ caregiverId });
+      const legacy = Capacitor.getPlatform() === "ios"
+        ? await NativeAudio.getPendingUploads({ caregiverId })
+        : { recordings: [], unreadableCount: 0, cleanupFailureCount: 0 };
+      const recordings = [...(legacy.recordings || []), ...(current.recordings || [])];
+      const unreadableCount = (legacy.unreadableCount || 0) + (current.unreadableCount || 0);
+      const cleanupFailureCount = (legacy.cleanupFailureCount || 0) + (current.cleanupFailureCount || 0);
       const scanError = unreadableCount > 0
         ? "Some local recordings could not be read."
-        : cleanupFailureCount > 0 ? "Uploaded audio could not be removed from this iPhone." : "";
+        : cleanupFailureCount > 0 ? "Uploaded audio could not be removed from this device." : "";
       publish(caregiverId, { pendingCount: recordings.length, unreadableCount, cleanupFailureCount, error: scanError });
       let hadError = unreadableCount > 0 || cleanupFailureCount > 0;
+      let unfinishedStatus = null;
       for (const recording of recordings) {
         if (controller.signal.aborted) return;
         publish(caregiverId, { status: "uploading", progress: null, completedId: null });
         try {
-          await transferNativeRecording(
+          const native = recording.format === "standalone" ? SegmentedAudio : NativeAudio;
+          const finalized = await transferNativeRecording(
             recording,
             caregiverId,
-            NativeAudio,
+            native,
             recordingsApi,
             controller.signal,
             (progress) => publish(caregiverId, { progress })
           );
-          publish(caregiverId, { pendingCount: Math.max(0, getNativeRecordingSyncState(caregiverId).pendingCount - 1), completedId: recording.id });
+          if (finalized) {
+            publish(caregiverId, {
+              pendingCount: Math.max(0, getNativeRecordingSyncState(caregiverId).pendingCount - 1),
+              completedId: recording.id,
+            });
+          } else {
+            unfinishedStatus = recording.stopped ? "processing" : "uploading";
+          }
         } catch (error) {
           if (controller.signal.aborted) return;
           hadError = true;
@@ -70,7 +87,7 @@ export async function syncNativeRecordings(caregiverId) {
         }
       }
       publish(caregiverId, {
-        status: hadError ? "pending" : "idle",
+        status: hadError ? "pending" : (unfinishedStatus || "idle"),
         completedId: null,
         error: hadError ? getNativeRecordingSyncState(caregiverId).error : "",
         progress: null,

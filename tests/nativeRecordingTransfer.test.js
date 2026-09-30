@@ -14,6 +14,7 @@ function setup({ size = 7, chunkSize = 3 } = {}) {
     ...manifest,
   };
   let remoteStatus = "recording";
+  let mergeStatus = "completed";
   const native = {
     async setUploadSession({ sessionId }) { manifest.sessionId = sessionId; },
     async resetUploadSession() { Object.assign(manifest, { sessionId: null, uploadedBytes: 0, nextChunkIndex: 0 }); },
@@ -45,7 +46,10 @@ function setup({ size = 7, chunkSize = 3 } = {}) {
       return { sessionId: "rec_test", caregiverId, date };
     },
     async getRecordingSession() {
-      return { sessionId: "rec_test", caregiverId: 1, date: recording.date, status: remoteStatus };
+      return {
+        sessionId: "rec_test", caregiverId: 1, date: recording.date, status: remoteStatus,
+        mergeStatus, finalAudio: mergeStatus === "completed" ? { storagePath: "audio/test/recording.m4a" } : null,
+      };
     },
     async uploadRecordingChunk(sessionId, index, blob) {
       calls.uploaded.push({ index, bytes: [...new Uint8Array(await blob.arrayBuffer())], type: blob.type });
@@ -54,10 +58,14 @@ function setup({ size = 7, chunkSize = 3 } = {}) {
     async completeRecordingSession(sessionId, finalChunkIndex, durationSeconds) {
       calls.completed.push({ finalChunkIndex, durationSeconds });
       remoteStatus = "completed";
-      return { sessionId, status: "completed" };
+      return { sessionId, status: "completed", mergeStatus: "pending" };
     },
   };
-  return { recording, manifest, native, api, calls, setRemoteStatus: (status) => { remoteStatus = status; } };
+  return {
+    recording, manifest, native, api, calls,
+    setRemoteStatus: (status) => { remoteStatus = status; },
+    setMergeStatus: (status) => { mergeStatus = status; },
+  };
 }
 
 test("uploads ordered M4A byte slices, then completes with duration", async () => {
@@ -112,7 +120,11 @@ test("missing server session restarts upload from the saved local file", async (
   fixture.manifest.sessionId = "stale";
   fixture.manifest.uploadedBytes = 3;
   fixture.manifest.nextChunkIndex = 1;
-  fixture.api.getRecordingSession = async () => { throw Object.assign(new Error("missing"), { status: 404 }); };
+  const getSession = fixture.api.getRecordingSession;
+  fixture.api.getRecordingSession = async (sessionId) => {
+    if (sessionId === "stale") throw Object.assign(new Error("missing"), { status: 404 });
+    return getSession(sessionId);
+  };
   await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api);
   assert.equal(fixture.calls.created, 1);
   assert.deepEqual(fixture.calls.uploaded.map(({ index }) => index), [0, 1, 2]);
@@ -173,5 +185,86 @@ test("failed completion retains local audio until the server confirms it", async
   fail = false;
   await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api);
   assert.equal(fixture.calls.created, 1);
+  assert.equal(fixture.calls.deleted, 1);
+});
+
+test("completed session retains local audio until the final merged file exists", async () => {
+  const fixture = setup();
+  fixture.setMergeStatus("pending");
+  const first = await transferNativeRecording(fixture.recording, 1, fixture.native, fixture.api);
+  assert.equal(first, false);
+  assert.equal(fixture.calls.deleted, 0);
+
+  fixture.setMergeStatus("completed");
+  const second = await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api);
+  assert.equal(second, true);
+  assert.equal(fixture.calls.deleted, 1);
+  assert.equal(fixture.calls.completed.length, 1);
+});
+
+test("verified merge permits cleanup after a lost local final acknowledgement", async () => {
+  const fixture = setup();
+  fixture.manifest.sessionId = "rec_test";
+  fixture.manifest.uploadedBytes = fixture.recording.sizeBytes - 1;
+  fixture.manifest.nextChunkIndex = 2;
+  fixture.setRemoteStatus("completed");
+  fixture.native.deleteUploadedRecording = async ({ sessionId }) => {
+    assert.equal(sessionId, fixture.manifest.sessionId);
+    fixture.calls.deleted += 1;
+  };
+  const finalized = await transferNativeRecording(
+    { ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api
+  );
+  assert.equal(finalized, true);
+  assert.equal(fixture.calls.deleted, 1);
+  assert.equal(fixture.calls.uploaded.length, 0);
+});
+
+test("failed merge retains local audio", async () => {
+  const fixture = setup();
+  fixture.manifest.sessionId = "rec_test";
+  fixture.setRemoteStatus("completed");
+  fixture.setMergeStatus("failed");
+  await assert.rejects(
+    transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api),
+    /processing failed/
+  );
+  assert.equal(fixture.calls.deleted, 0);
+});
+
+test("standalone segments upload during recording and complete only after stop", async () => {
+  const fixture = setup();
+  const recording = { ...fixture.recording, format: "standalone", segmentCount: 2, stopped: false, durationSeconds: 6 };
+  fixture.native.readUploadChunk = async () => ({
+    base64: Buffer.from([1, 2, 3]).toString("base64"), byteCount: 3, chunkIndex: fixture.manifest.nextChunkIndex,
+  });
+  fixture.native.confirmUploadChunk = async ({ chunkIndex }) => {
+    assert.equal(chunkIndex, fixture.manifest.nextChunkIndex);
+    fixture.manifest.nextChunkIndex += 1;
+  };
+  fixture.native.deleteUploadedRecording = async () => { fixture.calls.deleted += 1; };
+  fixture.api.createRecordingSession = async (date, caregiverId, options) => {
+    assert.equal(options.chunkFormat, "standalone");
+    fixture.calls.created += 1;
+    return { sessionId: "rec_test", caregiverId, date };
+  };
+  let remoteStatus = "recording";
+  fixture.api.getRecordingSession = async () => ({
+    sessionId: "rec_test", caregiverId: 1, date: recording.date, chunkFormat: "standalone",
+    status: remoteStatus, mergeStatus: "completed", finalAudio: { storagePath: "audio/test/recording.m4a" },
+  });
+  const complete = fixture.api.completeRecordingSession;
+  fixture.api.completeRecordingSession = async (...args) => {
+    const result = await complete(...args);
+    remoteStatus = "completed";
+    return result;
+  };
+  assert.equal(await transferNativeRecording(recording, 1, fixture.native, fixture.api), false);
+  assert.deepEqual(fixture.calls.uploaded.map(({ index }) => index), [0, 1]);
+  assert.equal(fixture.calls.completed.length, 0);
+
+  assert.equal(await transferNativeRecording({ ...recording, ...fixture.manifest, segmentCount: 2, stopped: true },
+    1, fixture.native, fixture.api), true);
+  assert.deepEqual(fixture.calls.completed, [{ finalChunkIndex: 1, durationSeconds: 6 }]);
   assert.equal(fixture.calls.deleted, 1);
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { NativeAudio, nativeAudioSupported } from "../lib/nativeAudioApi.js";
+import { nativeAudioSupported } from "../lib/nativeAudioApi.js";
+import { SegmentedAudio } from "../lib/nativeSegmentedAudioApi.js";
 import { formatTodayDate } from "../lib/dailyApi.js";
 import {
   getNativeRecordingSyncState,
@@ -52,7 +53,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     async function connect() {
       if (!nativeAudioSupported) return;
       try {
-        const nextStateListener = await NativeAudio.addListener("recordingStateChanged", (next) => {
+        const nextStateListener = await SegmentedAudio.addListener("recordingStateChanged", (next) => {
           if (cancelled) return;
           setStatus(next.status);
           setElapsedSeconds(Math.floor(next.elapsedSeconds ?? 0));
@@ -67,7 +68,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         }
         stateListener = nextStateListener;
 
-        const current = await NativeAudio.getStatus({ caregiverId });
+        const current = await SegmentedAudio.getStatus({ caregiverId });
         if (cancelled) return;
         setStatus(current.status);
         setElapsedSeconds(Math.floor(current.elapsedSeconds ?? 0));
@@ -82,7 +83,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
 
     function refreshWhenVisible() {
       if (document.visibilityState !== "visible" || !nativeAudioSupported) return;
-      NativeAudio.getStatus({ caregiverId }).then((current) => {
+      SegmentedAudio.getStatus({ caregiverId }).then((current) => {
         if (cancelled) return;
         setStatus(current.status);
         setElapsedSeconds(Math.floor(current.elapsedSeconds ?? 0));
@@ -113,7 +114,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     if (status !== "recording") return undefined;
     let cancelled = false;
     const timer = window.setInterval(() => {
-      NativeAudio.getStatus({ caregiverId }).then((current) => {
+      SegmentedAudio.getStatus({ caregiverId }).then((current) => {
         if (cancelled) return;
         setStatus(current.status);
         setElapsedSeconds(Math.floor(current.elapsedSeconds ?? 0));
@@ -138,7 +139,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     setError("");
     try {
       if (status === "recording") {
-        const result = await NativeAudio.stop({ caregiverId });
+        const result = await SegmentedAudio.stop({ caregiverId });
         setStatus(result.status);
         setElapsedSeconds(Math.floor(result.recording.durationSeconds));
         setLatestRecording(result.recording);
@@ -147,7 +148,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
           setError("The date has changed. Please reopen Dashboard before recording.");
           return;
         }
-        const result = await NativeAudio.start({ caregiverId, date });
+        const result = await SegmentedAudio.start({ caregiverId, date });
         setStatus(result.status);
         setElapsedSeconds(0);
         setLatestRecording(null);
@@ -155,7 +156,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     } catch (cause) {
       setError(cause?.message || "Unable to record. Please try again.");
       try {
-        const current = await NativeAudio.getStatus({ caregiverId });
+        const current = await SegmentedAudio.getStatus({ caregiverId });
         setStatus(current.status);
         if (current.latestRecording) setLatestRecording(current.latestRecording);
       } catch {
@@ -171,7 +172,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     return (
       <section className="card p-5">
         <p className="section-title">Recording</p>
-        <p className="mt-5 text-sm text-ink-500">Native recording is not available on Android yet.</p>
+        <p className="mt-5 text-sm text-ink-500">Native recording is unavailable on this device.</p>
       </section>
     );
   }
@@ -199,25 +200,28 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         <p className="font-display text-4xl">{formatElapsed(elapsedSeconds)}</p>
         <p className="text-sm text-ink-600">
           {status === "recording"
-            ? "Recording to this iPhone"
+            ? "Recording on this device"
             : latestRecording?.uploaded
               ? "Audio saved to ELLA"
               : latestRecording
-                ? "Saved on this iPhone"
+                ? "Saved on this device"
                 : "Ready to record"}
         </p>
 
-        {syncState.status === "uploading" && (
+        {(syncState.status === "uploading" || syncState.status === "processing") && (
           <p className="text-sm text-brand-700">
-            Uploading saved audio...
-            {syncState.progress?.sizeBytes > 0 && ` ${Math.round(100 * syncState.progress.uploadedBytes / syncState.progress.sizeBytes)}%`}
+            {syncState.status === "processing" ? "Finishing audio..." : "Saving audio..."}
+            {syncState.progress?.totalChunks > 0 &&
+              ` ${syncState.progress.uploadedChunks}/${syncState.progress.totalChunks} parts`}
+            {syncState.progress?.sizeBytes > 0 &&
+              ` ${Math.round(100 * syncState.progress.uploadedBytes / syncState.progress.sizeBytes)}%`}
           </p>
         )}
-        {(syncState.pendingCount > 0 || syncState.error) && syncState.status !== "uploading" && (
+        {syncState.status === "pending" && (syncState.pendingCount > 0 || syncState.error) && (
           <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             {syncState.pendingCount > 0 && (
               <p>
-                {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} saved on this iPhone, waiting to upload.
+                {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} saved on this device. Please retry when connected.
               </p>
             )}
             {syncState.error && (
@@ -225,7 +229,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                 {syncState.unreadableCount > 0
                   ? "Some saved audio could not be read. Please contact the ELLA team."
                   : syncState.cleanupFailureCount > 0
-                    ? "Uploaded audio could not be removed from this iPhone. Please retry."
+                    ? "Uploaded audio could not be removed from this device. Please retry."
                   : "Upload could not finish. Please retry."}
               </p>
             )}

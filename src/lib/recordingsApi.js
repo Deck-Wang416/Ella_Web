@@ -35,6 +35,7 @@ export async function createRecordingSession(date, caregiverId, options = {}) {
       date,
       caregiverId,
       childId: CHILD_ID,
+      chunkFormat: options.chunkFormat || "byte_stream",
     }),
   });
 }

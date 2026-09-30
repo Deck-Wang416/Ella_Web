@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { NativeAudio, nativeAudioSupported } from "../lib/nativeAudioApi.js";
+import { nativeAudioSupported } from "../lib/nativeAudioApi.js";
+import { SegmentedAudio } from "../lib/nativeSegmentedAudioApi.js";
 import { cancelNativeRecordingSync, syncNativeRecordings } from "../lib/nativeRecordingSync.js";
 
 export function useNativeRecordingSync(caregiverId) {
@@ -11,11 +12,9 @@ export function useNativeRecordingSync(caregiverId) {
     function retry() {
       if (document.visibilityState === "visible") void syncNativeRecordings(caregiverId);
     }
-    function onRecordingChange(event) {
-      if (event.status !== "recording") retry();
-    }
+    function onRecordingChange() { retry(); }
 
-    void NativeAudio.addListener("recordingStateChanged", onRecordingChange).then((next) => {
+    void SegmentedAudio.addListener("recordingStateChanged", onRecordingChange).then((next) => {
       if (disposed) void next.remove();
       else listener = next;
     }).catch(() => {
@@ -23,7 +22,7 @@ export function useNativeRecordingSync(caregiverId) {
     });
     window.addEventListener("online", retry);
     document.addEventListener("visibilitychange", retry);
-    const interval = window.setInterval(retry, 60_000);
+    const interval = window.setInterval(retry, 3000);
     retry();
 
     return () => {
