@@ -270,6 +270,25 @@ public class SegmentedAudioPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void discardRecording(PluginCall call) {
+        synchronized (SegmentStore.LOCK) {
+            try {
+                File directory = targetDirectory(call);
+                JSONObject manifest = SegmentStore.read(directory);
+                String sessionId = manifest.isNull("sessionId") ? null : manifest.optString("sessionId", null);
+                if (!manifest.optBoolean("stopped") ||
+                    SegmentedAudioService.isCapturing(caregiver(call), manifest.optString("id")) ||
+                    !java.util.Objects.equals(sessionId, call.getString("sessionId")))
+                    throw new IOException("Recording cannot be discarded while active or after its session changes");
+                manifest.put("uploaded", true);
+                SegmentStore.write(directory, manifest);
+                SegmentStore.deleteTree(directory);
+                call.resolve();
+            } catch (Exception error) { call.reject(error.getMessage(), null, error); }
+        }
+    }
+
+    @PluginMethod
     public void deleteUploadedRecording(PluginCall call) {
         synchronized (SegmentStore.LOCK) {
             try {

@@ -15,6 +15,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         CAPPluginMethod(name: "readUploadChunk", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "confirmUploadChunk", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resetUploadSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "discardRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteUploadedRecording", returnType: CAPPluginReturnPromise)
     ]
 
@@ -40,6 +41,8 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
     private var totalFrames: AVAudioFramePosition = 0
     private var sampleRate: Double = 0
     private var interrupted = false
+    private var interruptedRecordingID: String?
+    private var captureFailure: String?
 
     override public func load() {
         NotificationCenter.default.addObserver(
@@ -151,6 +154,8 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
             totalFrames = 0
             framesInSegment = 0
             interrupted = false
+            interruptedRecordingID = nil
+            captureFailure = nil
             input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] buffer, _ in
                 self?.append(buffer, format: format)
             }
@@ -202,6 +207,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
                 }
             }
         } catch {
+            captureFailure = "Microphone recording failed: \(error.localizedDescription)"
             DispatchQueue.main.async { [weak self] in self?.finish(interrupted: true) }
         }
     }
@@ -214,25 +220,53 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         lock.lock(); defer { lock.unlock() }
         engine = nil
         currentFile = nil
-        guard let directory = currentDirectory, currentManifest != nil,
-              var manifest = try? load(directory) else { return nil }
+        let directory = currentDirectory
+        let savedManifest = directory.flatMap { try? load($0) }
+        currentDirectory = nil
+        currentManifest = nil
+        guard let directory, var manifest = savedManifest else {
+            framesInSegment = 0
+            interrupted = true
+            interruptedRecordingID = nil
+            let message = captureFailure ?? "Recording metadata was lost. Please try again."
+            captureFailure = message
+            if let directory { try? FileManager.default.removeItem(at: directory) }
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            notifyListeners("recordingStateChanged", data: ["status": "interrupted",
+                "error": message, "elapsedSeconds": 0])
+            return nil
+        }
         if framesInSegment > 0 {
             manifest.segmentCount += 1
             manifest.durationSeconds = Double(totalFrames) / sampleRate
         }
         manifest.stopped = true
-        currentDirectory = nil
-        currentManifest = nil
         framesInSegment = 0
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         if manifest.segmentCount == 0 {
             try? FileManager.default.removeItem(at: directory)
+            interrupted = wasInterrupted
+            interruptedRecordingID = nil
+            if wasInterrupted {
+                notifyListeners("recordingStateChanged", data: ["status": "interrupted",
+                    "error": captureFailure ?? "No audio was captured. Please try again.", "elapsedSeconds": 0])
+            }
             return nil
         }
-        do { try save(manifest, directory) } catch { return nil }
+        do { try save(manifest, directory) } catch {
+            interrupted = true
+            interruptedRecordingID = nil
+            let message = "Unable to save the recording: \(error.localizedDescription)"
+            captureFailure = message
+            notifyListeners("recordingStateChanged", data: ["status": "interrupted",
+                "error": message, "elapsedSeconds": manifest.durationSeconds])
+            return nil
+        }
         interrupted = wasInterrupted
+        interruptedRecordingID = wasInterrupted ? manifest.id : nil
         notifyListeners("recordingStateChanged", data: ["status": wasInterrupted ? "interrupted" : "saved",
-            "recording": summary(manifest), "elapsedSeconds": manifest.durationSeconds])
+            "recording": summary(manifest), "elapsedSeconds": manifest.durationSeconds,
+            "error": wasInterrupted ? captureFailure ?? "Recording was interrupted." : ""])
         return manifest
     }
 
@@ -240,7 +274,10 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         DispatchQueue.main.async { [weak self] in
             guard let self, let caregiverId = self.caregiver(call),
                   self.currentManifest?.caregiverId == caregiverId else { call.reject("No recording is in progress."); return }
-            guard let manifest = self.finish(interrupted: false) else { call.reject("No audio was captured."); return }
+            guard let manifest = self.finish(interrupted: false) else {
+                call.reject(self.captureFailure ?? "No audio was captured. Please try again.")
+                return
+            }
             call.resolve(["status": "saved", "recording": self.summary(manifest)])
         }
     }
@@ -253,9 +290,12 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
             return
         }
         let latest = (try? manifests(caregiverId).last)?.1
-        var result: [String: Any] = ["status": interrupted ? "interrupted" : "idle", "elapsedSeconds": 0]
+        let currentInterrupted = interrupted && (latest?.id == interruptedRecordingID ||
+            (latest == nil && interruptedRecordingID == nil))
+        var result: [String: Any] = ["status": currentInterrupted ? "interrupted" : "idle", "elapsedSeconds": 0]
+        if currentInterrupted { result["error"] = captureFailure ?? "Recording was interrupted." }
         if let latest {
-            result["status"] = interrupted ? "interrupted" : "saved"
+            result["status"] = currentInterrupted ? "interrupted" : "saved"
             result["elapsedSeconds"] = latest.durationSeconds
             result["latestRecording"] = summary(latest)
         }
@@ -283,17 +323,19 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
             var cleanupFailureCount = 0
             for (directory, original) in try manifests(caregiverId) {
                 var manifest = original
+                // Enumerated directory URLs may not equal the URL used at creation time.
+                let isActive = engine != nil && currentManifest?.id == manifest.id
                 if manifest.uploaded {
                     do { try FileManager.default.removeItem(at: directory) }
                     catch { cleanupFailureCount += 1 }
                     continue
                 }
-                if !manifest.stopped && currentDirectory != directory {
+                if !manifest.stopped && !isActive {
                     try? FileManager.default.removeItem(at: segmentURL(directory, manifest.segmentCount))
                     manifest.stopped = true
                     try save(manifest, directory)
                 }
-                if manifest.stopped && manifest.segmentCount == 0 {
+                if manifest.stopped && manifest.segmentCount == 0 && !isActive {
                     try? FileManager.default.removeItem(at: directory)
                     continue
                 }
@@ -337,6 +379,27 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         manifest.nextChunkIndex = 0
     } }
 
+    @objc func discardRecording(_ call: CAPPluginCall) {
+        lock.lock(); defer { lock.unlock() }
+        do {
+            let (directory, manifest) = try target(call)
+            guard manifest.stopped, currentManifest?.id != manifest.id,
+                  manifest.sessionId == call.getString("sessionId") else {
+                throw failure("Recording cannot be discarded while active or after its session changes.")
+            }
+            var discarded = manifest
+            discarded.uploaded = true
+            try save(discarded, directory)
+            try FileManager.default.removeItem(at: directory)
+            if interruptedRecordingID == manifest.id {
+                interrupted = false
+                interruptedRecordingID = nil
+                captureFailure = nil
+            }
+            call.resolve()
+        } catch { call.reject(error.localizedDescription, nil, error) }
+    }
+
     @objc func deleteUploadedRecording(_ call: CAPPluginCall) { changeManifest(call) { manifest, _ in
         // JS calls this only after the backend confirms verified final audio. A crash may have
         // lost the last local acknowledgement even though the server merged every segment.
@@ -344,7 +407,14 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
             throw self.failure("Audio is not finalized.")
         }
         manifest.uploaded = true
-    } afterSave: { directory in try FileManager.default.removeItem(at: directory) } }
+    } afterSave: { directory in
+        try FileManager.default.removeItem(at: directory)
+        if self.interruptedRecordingID == call.getString("id") {
+            self.interrupted = false
+            self.interruptedRecordingID = nil
+            self.captureFailure = nil
+        }
+    } }
 
     private func changeManifest(_ call: CAPPluginCall, change: (inout Manifest, URL) throws -> Void,
                                 afterSave: ((URL) throws -> Void)? = nil) {
@@ -366,6 +436,8 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
     @objc private func audioInterrupted(_ notification: Notification) {
         guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+        // The interrupted audio session cannot guarantee a gapless resume. Seal what we have;
+        // upload sync will complete this recording when the app is able to run.
         DispatchQueue.main.async { [weak self] in self?.finish(interrupted: true) }
     }
 }

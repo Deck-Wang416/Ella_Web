@@ -1,12 +1,12 @@
-import { NativeAudio, nativeAudioSupported } from "./nativeAudioApi.js";
+import { nativeAudioSupported } from "./nativeAudioApi.js";
 import { SegmentedAudio } from "./nativeSegmentedAudioApi.js";
-import { Capacitor } from "@capacitor/core";
 import * as recordingsApi from "./recordingsApi.js";
 import { transferNativeRecording } from "./nativeRecordingTransfer.js";
 
 const listeners = new Set();
 const running = new Map();
 const snapshots = new Map();
+const pausedCaregivers = new Set();
 
 function publish(caregiverId, state) {
   const next = { ...snapshots.get(caregiverId), ...state };
@@ -27,8 +27,20 @@ export function cancelNativeRecordingSync(caregiverId) {
   running.get(caregiverId)?.controller.abort();
 }
 
+export async function pauseNativeRecordingSync(caregiverId) {
+  pausedCaregivers.add(caregiverId);
+  const active = running.get(caregiverId);
+  active?.controller.abort();
+  await active?.promise;
+}
+
+export function resumeNativeRecordingSync(caregiverId) {
+  pausedCaregivers.delete(caregiverId);
+  return syncNativeRecordings(caregiverId);
+}
+
 export async function syncNativeRecordings(caregiverId) {
-  if (!nativeAudioSupported || !caregiverId) return;
+  if (!nativeAudioSupported || !caregiverId || pausedCaregivers.has(caregiverId)) return;
   if (running.has(caregiverId)) {
     const active = running.get(caregiverId);
     if (active.controller.signal.aborted) {
@@ -43,27 +55,24 @@ export async function syncNativeRecordings(caregiverId) {
   const promise = (async () => {
     try {
       const current = await SegmentedAudio.getPendingUploads({ caregiverId });
-      const legacy = Capacitor.getPlatform() === "ios"
-        ? await NativeAudio.getPendingUploads({ caregiverId })
-        : { recordings: [], unreadableCount: 0, cleanupFailureCount: 0 };
-      const recordings = [...(legacy.recordings || []), ...(current.recordings || [])];
-      const unreadableCount = (legacy.unreadableCount || 0) + (current.unreadableCount || 0);
-      const cleanupFailureCount = (legacy.cleanupFailureCount || 0) + (current.cleanupFailureCount || 0);
+      const recordings = current.recordings || [];
+      const unreadableCount = current.unreadableCount || 0;
+      const cleanupFailureCount = current.cleanupFailureCount || 0;
       const scanError = unreadableCount > 0
         ? "Some local recordings could not be read."
         : cleanupFailureCount > 0 ? "Uploaded audio could not be removed from this device." : "";
       publish(caregiverId, { pendingCount: recordings.length, unreadableCount, cleanupFailureCount, error: scanError });
       let hadError = unreadableCount > 0 || cleanupFailureCount > 0;
       let unfinishedStatus = null;
+      const failedRecordings = [];
       for (const recording of recordings) {
         if (controller.signal.aborted) return;
         publish(caregiverId, { status: "uploading", progress: null, completedId: null });
         try {
-          const native = recording.format === "standalone" ? SegmentedAudio : NativeAudio;
           const finalized = await transferNativeRecording(
             recording,
             caregiverId,
-            native,
+            SegmentedAudio,
             recordingsApi,
             controller.signal,
             (progress) => publish(caregiverId, { progress })
@@ -79,9 +88,11 @@ export async function syncNativeRecordings(caregiverId) {
         } catch (error) {
           if (controller.signal.aborted) return;
           hadError = true;
+          if (recording.stopped && error?.discardable !== false) failedRecordings.push(recording);
           publish(caregiverId, {
             status: "pending",
             error: error?.message || "Unable to upload saved audio.",
+            failedRecordings: [...failedRecordings],
           });
           if (navigator.onLine === false) break;
         }
@@ -91,10 +102,11 @@ export async function syncNativeRecordings(caregiverId) {
         completedId: null,
         error: hadError ? getNativeRecordingSyncState(caregiverId).error : "",
         progress: null,
+        failedRecordings,
       });
     } catch (error) {
       if (!controller.signal.aborted) {
-        publish(caregiverId, { status: "pending", error: error?.message || "Unable to check saved audio." });
+        publish(caregiverId, { status: "pending", error: error?.message || "Unable to check saved audio.", failedRecordings: [] });
       }
     } finally {
       if (running.get(caregiverId) === entry) {

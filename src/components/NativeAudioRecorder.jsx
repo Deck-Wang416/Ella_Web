@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nativeAudioSupported } from "../lib/nativeAudioApi.js";
 import { SegmentedAudio } from "../lib/nativeSegmentedAudioApi.js";
 import { formatTodayDate } from "../lib/dailyApi.js";
+import * as recordingsApi from "../lib/recordingsApi.js";
+import { discardSavedRecording } from "../lib/nativeRecordingDiscard.js";
 import {
   getNativeRecordingSyncState,
+  pauseNativeRecordingSync,
+  resumeNativeRecordingSync,
   subscribeNativeRecordingSync,
   syncNativeRecordings,
 } from "../lib/nativeRecordingSync.js";
@@ -23,6 +27,18 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
   const [syncState, setSyncState] = useState(() => getNativeRecordingSyncState(caregiverId));
   const busy = status === "recording" || working;
   const actionPendingRef = useRef(false);
+
+  const applyNativeStatus = useCallback((next) => {
+    setStatus(next.status);
+    setElapsedSeconds(Math.floor(next.elapsedSeconds ?? 0));
+    if (next.recording) setLatestRecording(next.recording);
+    else if (next.latestRecording !== undefined) setLatestRecording(next.latestRecording ?? null);
+    if (next.status === "interrupted") {
+      setError(next.recording || next.latestRecording
+        ? ""
+        : next.error || "No audio was captured. Please try again.");
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,12 +71,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       try {
         const nextStateListener = await SegmentedAudio.addListener("recordingStateChanged", (next) => {
           if (cancelled) return;
-          setStatus(next.status);
-          setElapsedSeconds(Math.floor(next.elapsedSeconds ?? 0));
-          if (next.recording) setLatestRecording(next.recording);
-          if (next.status === "interrupted") {
-            setError("Recording was interrupted. Check the saved audio before starting again.");
-          }
+          applyNativeStatus(next);
         });
         if (cancelled) {
           await nextStateListener.remove();
@@ -70,12 +81,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
 
         const current = await SegmentedAudio.getStatus({ caregiverId });
         if (cancelled) return;
-        setStatus(current.status);
-        setElapsedSeconds(Math.floor(current.elapsedSeconds ?? 0));
-        setLatestRecording(current.latestRecording ?? null);
-        if (current.status === "interrupted") {
-          setError("Recording was interrupted. Check the saved audio before starting again.");
-        }
+        applyNativeStatus(current);
       } catch {
         if (!cancelled) setError("Native recording is unavailable on this device.");
       }
@@ -85,12 +91,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       if (document.visibilityState !== "visible" || !nativeAudioSupported) return;
       SegmentedAudio.getStatus({ caregiverId }).then((current) => {
         if (cancelled) return;
-        setStatus(current.status);
-        setElapsedSeconds(Math.floor(current.elapsedSeconds ?? 0));
-        setLatestRecording(current.latestRecording ?? null);
-        if (current.status === "interrupted") {
-          setError("Recording was interrupted. Check the saved audio before starting again.");
-        }
+        applyNativeStatus(current);
       }).catch(() => {
         if (!cancelled) setError("Unable to check the recording status.");
       });
@@ -103,7 +104,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       void stateListener?.remove();
     };
-  }, [caregiverId]);
+  }, [caregiverId, applyNativeStatus]);
 
   useEffect(() => {
     onRecorderBusyChange?.(busy);
@@ -116,12 +117,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     const timer = window.setInterval(() => {
       SegmentedAudio.getStatus({ caregiverId }).then((current) => {
         if (cancelled) return;
-        setStatus(current.status);
-        setElapsedSeconds(Math.floor(current.elapsedSeconds ?? 0));
-        if (current.latestRecording) setLatestRecording(current.latestRecording);
-        if (current.status === "interrupted") {
-          setError("Recording was interrupted. Check the saved audio before starting again.");
-        }
+        applyNativeStatus(current);
       }).catch(() => {
         if (!cancelled) setError("Unable to check the recording status.");
       });
@@ -130,7 +126,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [caregiverId, status]);
+  }, [caregiverId, status, applyNativeStatus]);
 
   async function toggleRecording() {
     if (actionPendingRef.current || !enabled || !nativeAudioSupported) return;
@@ -162,6 +158,25 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       } catch {
         // Preserve the original error.
       }
+    } finally {
+      actionPendingRef.current = false;
+      setWorking(false);
+    }
+  }
+
+  async function discardUpload(recording) {
+    if (actionPendingRef.current || !window.confirm("Discard this recording? Its saved audio cannot be recovered.")) return;
+    actionPendingRef.current = true;
+    setWorking(true);
+    setError("");
+    try {
+      await discardSavedRecording(caregiverId, recording.id, SegmentedAudio, recordingsApi, {
+        pauseNativeRecordingSync,
+        resumeNativeRecordingSync,
+      });
+      setLatestRecording((current) => current?.id === recording.id ? null : current);
+    } catch (cause) {
+      setError(cause?.message || "Unable to discard this recording. Its audio remains on this device.");
     } finally {
       actionPendingRef.current = false;
       setWorking(false);
@@ -208,20 +223,25 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                 : "Ready to record"}
         </p>
 
+        {status === "interrupted" && latestRecording && !latestRecording.uploaded && (
+          <p className="w-full rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
+            Recording was interrupted by your device. Captured audio is saved here and will resume uploading when possible.
+          </p>
+        )}
+
         {(syncState.status === "uploading" || syncState.status === "processing") && (
           <p className="text-sm text-brand-700">
             {syncState.status === "processing" ? "Finishing audio..." : "Saving audio..."}
             {syncState.progress?.totalChunks > 0 &&
               ` ${syncState.progress.uploadedChunks}/${syncState.progress.totalChunks} parts`}
-            {syncState.progress?.sizeBytes > 0 &&
-              ` ${Math.round(100 * syncState.progress.uploadedBytes / syncState.progress.sizeBytes)}%`}
           </p>
         )}
-        {syncState.status === "pending" && (syncState.pendingCount > 0 || syncState.error) && (
+        {(syncState.status === "pending" || (syncState.failedRecordings || []).length > 0) &&
+          (syncState.pendingCount > 0 || syncState.error) && (
           <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             {syncState.pendingCount > 0 && (
               <p>
-                {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} saved on this device. Please retry when connected.
+                {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} saved on this device and awaiting upload.
               </p>
             )}
             {syncState.error && (
@@ -230,12 +250,27 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                   ? "Some saved audio could not be read. Please contact the ELLA team."
                   : syncState.cleanupFailureCount > 0
                     ? "Uploaded audio could not be removed from this device. Please retry."
-                  : "Upload could not finish. Please retry."}
+                    : "Upload could not finish. Please retry."}
               </p>
             )}
-            <button type="button" className="btn-ghost mt-3" onClick={() => void syncNativeRecordings(caregiverId)}>
-              Retry upload
-            </button>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <button type="button" className="btn-ghost" disabled={working} onClick={() => void syncNativeRecordings(caregiverId)}>
+                Retry upload
+              </button>
+              {(syncState.failedRecordings || [])
+                .filter((recording) => recording.stopped)
+                .map((recording, index, items) => (
+                  <button
+                    key={recording.id}
+                    type="button"
+                    className="btn-ghost border-red-200 text-red-600 hover:border-red-400 hover:text-red-700"
+                    disabled={working}
+                    onClick={() => void discardUpload(recording)}
+                  >
+                    {items.length === 1 ? "Discard upload" : `Discard recording ${index + 1}`}
+                  </button>
+                ))}
+            </div>
           </div>
         )}
         {error && (

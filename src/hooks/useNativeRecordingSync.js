@@ -12,7 +12,13 @@ export function useNativeRecordingSync(caregiverId) {
     function retry() {
       if (document.visibilityState === "visible") void syncNativeRecordings(caregiverId);
     }
-    function onRecordingChange() { retry(); }
+    function onRecordingChange(event) {
+      if (event.status === "saved" || event.status === "interrupted") {
+        void syncNativeRecordings(caregiverId);
+      } else {
+        retry();
+      }
+    }
 
     void SegmentedAudio.addListener("recordingStateChanged", onRecordingChange).then((next) => {
       if (disposed) void next.remove();

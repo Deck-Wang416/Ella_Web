@@ -78,3 +78,12 @@ export async function completeRecordingSession(sessionId, finalChunkIndex, durat
     }),
   });
 }
+
+export async function cancelRecordingSession(sessionId, caregiverId, options = {}) {
+  return requestJson(`${API_BASE}/recordings/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+    method: "POST",
+    signal: options.signal,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caregiverId }),
+  });
+}

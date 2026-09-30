@@ -1,4 +1,3 @@
-const MIME_TYPE = "audio/mp4";
 const RETRY_DELAYS_MS = [1000, 2500];
 
 function assertNotAborted(signal) {
@@ -17,11 +16,19 @@ function mergedAudioIsReady(session) {
 
 async function reconcileCompleted(session, native, target, sessionId) {
   if (mergedAudioIsReady(session)) {
-    await native.deleteUploadedRecording({ ...target, sessionId });
+    try {
+      await native.deleteUploadedRecording({ ...target, sessionId });
+    } catch (cause) {
+      const error = new Error(cause?.message || "Unable to remove uploaded audio from this device.", { cause });
+      error.discardable = false;
+      throw error;
+    }
     return true;
   }
   if (session.mergeStatus === "failed") {
-    throw new Error("Audio was uploaded, but processing failed. Please contact the ELLA team.");
+    const error = new Error("Audio was uploaded, but processing failed. Please contact the ELLA team.");
+    error.discardable = false;
+    throw error;
   }
   return false;
 }
@@ -59,19 +66,14 @@ async function uploadWithRetry(api, sessionId, chunkIndex, blob, signal) {
 
 // The native manifest owns upload progress; it is advanced only after the server confirms a chunk.
 export async function transferNativeRecording(recording, caregiverId, native, api, signal, onProgress = () => {}) {
-  const standalone = recording.format === "standalone";
-  if (!Number.isSafeInteger(recording.nextChunkIndex) || recording.nextChunkIndex < 0 ||
-      (standalone
-        ? !Number.isSafeInteger(recording.segmentCount) || recording.segmentCount < recording.nextChunkIndex
-        : !Number.isSafeInteger(recording.sizeBytes) || recording.sizeBytes <= 0 ||
-          !Number.isSafeInteger(recording.uploadedBytes) || recording.uploadedBytes < 0 ||
-          recording.uploadedBytes > recording.sizeBytes) ||
+  if (recording.format !== "standalone" ||
+      !Number.isSafeInteger(recording.nextChunkIndex) || recording.nextChunkIndex < 0 ||
+      !Number.isSafeInteger(recording.segmentCount) || recording.segmentCount < recording.nextChunkIndex ||
       !Number.isFinite(recording.durationSeconds) || recording.durationSeconds < 0) {
     throw new Error("Saved audio metadata is invalid.");
   }
   const target = { caregiverId, id: recording.id };
   let sessionId = recording.sessionId;
-  let uploadedBytes = recording.uploadedBytes;
   let nextChunkIndex = recording.nextChunkIndex;
 
   assertNotAborted(signal);
@@ -79,34 +81,35 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
     try {
       const remote = await api.getRecordingSession(sessionId, { signal });
       if (remote.caregiverId !== caregiverId || remote.date !== recording.date ||
-          (remote.chunkFormat || "byte_stream") !== (standalone ? "standalone" : "byte_stream")) {
+          remote.chunkFormat !== "standalone") {
         throw new Error("Recording session belongs to a different caregiver or date.");
       }
       if (remote.status === "completed") {
         return reconcileCompleted(remote, native, target, sessionId);
       }
+      if (remote.status === "cancelled") {
+        throw new Error("This upload was cancelled. Please discard its local copy.");
+      }
       if (remote.status !== "recording") {
         await native.resetUploadSession(target);
         sessionId = null;
-        uploadedBytes = 0;
         nextChunkIndex = 0;
       }
     } catch (error) {
       if (error?.status !== 404) throw error;
       await native.resetUploadSession(target);
       sessionId = null;
-      uploadedBytes = 0;
       nextChunkIndex = 0;
     }
   }
 
-  if (standalone && recording.segmentCount === 0) return false;
+  if (recording.segmentCount === 0) return false;
 
   if (!sessionId) {
     assertNotAborted(signal);
     const created = await api.createRecordingSession(recording.date, caregiverId, {
       signal,
-      chunkFormat: standalone ? "standalone" : "byte_stream",
+      chunkFormat: "standalone",
     });
     if (!created?.sessionId || created.caregiverId !== caregiverId || created.date !== recording.date) {
       throw new Error("Invalid recording session response.");
@@ -115,30 +118,34 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
     await native.setUploadSession({ ...target, sessionId });
   }
 
-  while (standalone ? nextChunkIndex < recording.segmentCount : uploadedBytes < recording.sizeBytes) {
+  while (nextChunkIndex < recording.segmentCount) {
     assertNotAborted(signal);
     const chunk = await native.readUploadChunk(target);
-    const blob = toBlob(chunk.base64, standalone ? "audio/wav" : MIME_TYPE);
+    const blob = toBlob(chunk.base64, "audio/wav");
     if (chunk.chunkIndex !== nextChunkIndex || chunk.byteCount !== blob.size || !blob.size) {
       throw new Error("Saved audio chunk does not match upload progress.");
     }
-    const result = await uploadWithRetry(api, sessionId, nextChunkIndex, blob, signal);
+    let result;
+    try {
+      result = await uploadWithRetry(api, sessionId, nextChunkIndex, blob, signal);
+    } catch (error) {
+      const failure = new Error(error?.message || "Audio upload failed", { cause: error });
+      failure.status = error?.status;
+      failure.recordingSessionId = sessionId;
+      failure.chunkIndex = nextChunkIndex;
+      throw failure;
+    }
     if (result.sessionId !== sessionId || result.chunkIndex !== nextChunkIndex) {
       throw new Error("Unexpected recording chunk response.");
     }
     await native.confirmUploadChunk({ ...target, sessionId, chunkIndex: nextChunkIndex, byteCount: chunk.byteCount });
-    if (!standalone) uploadedBytes += chunk.byteCount;
     nextChunkIndex += 1;
-    onProgress(standalone
-      ? { uploadedChunks: nextChunkIndex, totalChunks: recording.segmentCount }
-      : { uploadedBytes, sizeBytes: recording.sizeBytes });
+    onProgress({ uploadedChunks: nextChunkIndex, totalChunks: recording.segmentCount });
   }
 
   assertNotAborted(signal);
-  if (standalone && !recording.stopped) return false;
-  if (nextChunkIndex < 1 || (standalone
-    ? nextChunkIndex !== recording.segmentCount
-    : uploadedBytes !== recording.sizeBytes)) {
+  if (!recording.stopped) return false;
+  if (nextChunkIndex < 1 || nextChunkIndex !== recording.segmentCount) {
     throw new Error("Saved audio is incomplete.");
   }
   const durationSeconds = Math.max(1, Math.ceil(recording.durationSeconds));

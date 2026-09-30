@@ -134,7 +134,10 @@ public class SegmentedAudioService extends Service {
             byte[] buffer = new byte[8192];
             while (!stopRequested) {
                 int count = recorder.read(buffer, 0, buffer.length);
-                if (count < 0) break;
+                if (count < 0) {
+                    if (stopRequested) break;
+                    throw new IOException("Microphone recording was interrupted (code " + count + ")");
+                }
                 if (count == 0) continue;
                 if (current == null) {
                     synchronized (SegmentStore.LOCK) { manifest = SegmentStore.read(directory); }
