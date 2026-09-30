@@ -1,5 +1,10 @@
 {
   "appId": "com.ella.parentportal",
   "appName": "ELLA",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "banner", "list"]
+    }
+  }
 }

@@ -125,11 +125,15 @@ export async function deactivateStoredSubscription(caregiverId) {
   if (!storedId) return null;
 
   try {
-    return await requestJson(`${API_BASE}/subscriptions/${encodeURIComponent(storedId)}`, {
+    const result = await requestJson(`${API_BASE}/subscriptions/${encodeURIComponent(storedId)}`, {
       method: "DELETE",
     });
-  } finally {
     clearStoredSubscriptionId(caregiverId);
+    return result;
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    clearStoredSubscriptionId(caregiverId);
+    return null;
   }
 }
 

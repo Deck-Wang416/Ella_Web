@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { App as NativeApp } from "@capacitor/app";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useCaregiver } from "../context/CaregiverContext.jsx";
 import { deactivateOtherStoredSubscriptions } from "../lib/webPushApi.js";
+import { deactivateOtherNativePushSubscriptions } from "../lib/nativePushApi.js";
 import { loginProfile } from "../lib/profileApi.js";
+import { isNativeApp } from "../lib/platform.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,6 +13,20 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isNativeApp) return undefined;
+    let disposed = false;
+    let listener;
+    void NativeApp.addListener("backButton", () => { void NativeApp.minimizeApp(); }).then((next) => {
+      if (disposed) void next.remove();
+      else listener = next;
+    });
+    return () => {
+      disposed = true;
+      void listener?.remove();
+    };
+  }, []);
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -54,6 +71,7 @@ export default function Login() {
               try {
                 const profile = await loginProfile(username.trim(), password);
                 await deactivateOtherStoredSubscriptions(profile.caregiverId);
+                await deactivateOtherNativePushSubscriptions(profile.caregiverId);
                 login(profile);
                 setError("");
                 navigate("/dashboard");

@@ -7,6 +7,7 @@ import { CaregiverProvider } from "./context/CaregiverContext.jsx";
 import { useCaregiver } from "./context/CaregiverContext.jsx";
 import { ProfileProvider } from "./context/ProfileContext.jsx";
 import { useNativeRecordingSync } from "./hooks/useNativeRecordingSync.js";
+import { useNativePushSubscription } from "./hooks/useNativePushSubscription.js";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useCaregiver();
@@ -25,10 +26,17 @@ function NativeRecordingSync() {
   return null;
 }
 
+function NativePushBinding() {
+  const { caregiverId } = useCaregiver();
+  useNativePushSubscription(caregiverId);
+  return null;
+}
+
 export default function App() {
   return (
     <CaregiverProvider>
       <NativeRecordingSync />
+      <NativePushBinding />
       <AccountProfileProvider>
         <div className="app-shell">
           <Routes>

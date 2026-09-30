@@ -19,3 +19,5 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+android/app/google-services.json
+*.p8
