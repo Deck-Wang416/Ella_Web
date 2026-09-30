@@ -176,7 +176,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       });
       setLatestRecording((current) => current?.id === recording.id ? null : current);
     } catch (cause) {
-      setError(cause?.message || "Unable to discard this recording. Its audio remains on this device.");
+      setError(cause?.message || "Unable to discard this recording. Please try again.");
     } finally {
       actionPendingRef.current = false;
       setWorking(false);
@@ -215,25 +215,17 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         <p className="font-display text-4xl">{formatElapsed(elapsedSeconds)}</p>
         <p className="text-sm text-ink-600">
           {status === "recording"
-            ? "Recording on this device"
+            ? "Recording"
             : latestRecording?.uploaded
-              ? "Audio saved to ELLA"
-              : latestRecording
-                ? "Saved on this device"
+              ? "Saved to ELLA"
+              : latestRecording || syncState.pendingCount > 0
+                ? "Saving to ELLA"
                 : "Ready to record"}
         </p>
 
         {status === "interrupted" && latestRecording && !latestRecording.uploaded && (
           <p className="w-full rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
-            Recording was interrupted by your device. Captured audio is saved here and will resume uploading when possible.
-          </p>
-        )}
-
-        {(syncState.status === "uploading" || syncState.status === "processing") && (
-          <p className="text-sm text-brand-700">
-            {syncState.status === "processing" ? "Finishing audio..." : "Saving audio..."}
-            {syncState.progress?.totalChunks > 0 &&
-              ` ${syncState.progress.uploadedChunks}/${syncState.progress.totalChunks} parts`}
+            Recording was interrupted. We will save the captured audio when possible.
           </p>
         )}
         {(syncState.status === "pending" || (syncState.failedRecordings || []).length > 0) &&
@@ -241,7 +233,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
           <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             {syncState.pendingCount > 0 && (
               <p>
-                {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} saved on this device and awaiting upload.
+                {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} still need{syncState.pendingCount === 1 ? "s" : ""} to be saved to ELLA.
               </p>
             )}
             {syncState.error && (
@@ -249,7 +241,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                 {syncState.unreadableCount > 0
                   ? "Some saved audio could not be read. Please contact the ELLA team."
                   : syncState.cleanupFailureCount > 0
-                    ? "Uploaded audio could not be removed from this device. Please retry."
+                    ? "Audio was saved to ELLA, but cleanup needs another try."
                     : "Upload could not finish. Please retry."}
               </p>
             )}

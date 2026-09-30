@@ -65,7 +65,7 @@ async function uploadWithRetry(api, sessionId, chunkIndex, blob, signal) {
 }
 
 // The native manifest owns upload progress; it is advanced only after the server confirms a chunk.
-export async function transferNativeRecording(recording, caregiverId, native, api, signal, onProgress = () => {}) {
+export async function transferNativeRecording(recording, caregiverId, native, api, signal) {
   if (recording.format !== "standalone" ||
       !Number.isSafeInteger(recording.nextChunkIndex) || recording.nextChunkIndex < 0 ||
       !Number.isSafeInteger(recording.segmentCount) || recording.segmentCount < recording.nextChunkIndex ||
@@ -140,7 +140,6 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
     }
     await native.confirmUploadChunk({ ...target, sessionId, chunkIndex: nextChunkIndex, byteCount: chunk.byteCount });
     nextChunkIndex += 1;
-    onProgress({ uploadedChunks: nextChunkIndex, totalChunks: recording.segmentCount });
   }
 
   assertNotAborted(signal);

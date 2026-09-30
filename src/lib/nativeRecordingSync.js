@@ -67,15 +67,14 @@ export async function syncNativeRecordings(caregiverId) {
       const failedRecordings = [];
       for (const recording of recordings) {
         if (controller.signal.aborted) return;
-        publish(caregiverId, { status: "uploading", progress: null, completedId: null });
+        publish(caregiverId, { status: "uploading", completedId: null });
         try {
           const finalized = await transferNativeRecording(
             recording,
             caregiverId,
             SegmentedAudio,
             recordingsApi,
-            controller.signal,
-            (progress) => publish(caregiverId, { progress })
+            controller.signal
           );
           if (finalized) {
             publish(caregiverId, {
@@ -101,7 +100,6 @@ export async function syncNativeRecordings(caregiverId) {
         status: hadError ? "pending" : (unfinishedStatus || "idle"),
         completedId: null,
         error: hadError ? getNativeRecordingSyncState(caregiverId).error : "",
-        progress: null,
         failedRecordings,
       });
     } catch (error) {
