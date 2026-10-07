@@ -201,13 +201,19 @@ test("failed completion retains local audio until the server confirms it", async
   const fixture = setup();
   const complete = fixture.api.completeRecordingSession;
   let fail = true;
+  const accepted = [];
   fixture.api.completeRecordingSession = async (...args) => {
     if (fail) throw Object.assign(new Error("server unavailable"), { status: 503 });
     return complete(...args);
   };
-  await assert.rejects(transferNativeRecording(fixture.recording, 1, fixture.native, fixture.api), /server unavailable/);
+  await assert.rejects(
+    transferNativeRecording(fixture.recording, 1, fixture.native, fixture.api, undefined,
+      (recordingId) => accepted.push(recordingId)),
+    /server unavailable/
+  );
   assert.equal(fixture.manifest.nextChunkIndex, fixture.recording.segmentCount);
   assert.equal(fixture.calls.deleted, 0);
+  assert.deepEqual(accepted, []);
 
   fail = false;
   await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api);
@@ -218,15 +224,39 @@ test("failed completion retains local audio until the server confirms it", async
 test("completed session retains local audio until the final merged file exists", async () => {
   const fixture = setup();
   fixture.setMergeStatus("pending");
-  const first = await transferNativeRecording(fixture.recording, 1, fixture.native, fixture.api);
+  const accepted = [];
+  const first = await transferNativeRecording(
+    fixture.recording, 1, fixture.native, fixture.api, undefined,
+    (recordingId) => accepted.push(recordingId)
+  );
   assert.equal(first, false);
   assert.equal(fixture.calls.deleted, 0);
+  assert.deepEqual(accepted, [fixture.recording.id]);
 
   fixture.setMergeStatus("completed");
   const second = await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api);
   assert.equal(second, true);
   assert.equal(fixture.calls.deleted, 1);
   assert.equal(fixture.calls.completed.length, 1);
+});
+
+test("upload acceptance is restored from a completed session after reopening", async () => {
+  const fixture = setup();
+  fixture.manifest.sessionId = "rec_test";
+  fixture.manifest.nextChunkIndex = fixture.recording.segmentCount;
+  fixture.setRemoteStatus("completed");
+  fixture.setMergeStatus("pending");
+  const accepted = [];
+
+  const finalized = await transferNativeRecording(
+    { ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api,
+    undefined, (recordingId) => accepted.push(recordingId)
+  );
+
+  assert.equal(finalized, false);
+  assert.deepEqual(accepted, [fixture.recording.id]);
+  assert.equal(fixture.calls.completed.length, 0);
+  assert.equal(fixture.calls.deleted, 0);
 });
 
 test("verified merge permits cleanup after a lost local final acknowledgement", async () => {
@@ -253,7 +283,7 @@ test("failed merge retains local audio", async () => {
   fixture.setMergeStatus("failed");
   await assert.rejects(
     transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api),
-    (error) => error.discardable === false && /processing failed/.test(error.message)
+    (error) => error.discardable === false && error.code === "merge_failed"
   );
   assert.equal(fixture.calls.deleted, 0);
 });

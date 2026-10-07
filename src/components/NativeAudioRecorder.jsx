@@ -218,6 +218,10 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
             ? "Recording"
             : latestRecording?.uploaded
               ? "Saved to ELLA"
+              : latestRecording?.id === syncState.mergeFailedId
+                ? "Recording needs attention"
+              : latestRecording?.id === syncState.acceptedId
+                ? "Recording uploaded to ELLA"
               : latestRecording || syncState.pendingCount > 0
                 ? "Saving to ELLA"
                 : "Ready to record"}
@@ -231,7 +235,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         {(syncState.status === "pending" || (syncState.failedRecordings || []).length > 0) &&
           (syncState.pendingCount > 0 || syncState.error) && (
           <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {syncState.pendingCount > 0 && (
+            {syncState.pendingCount > 0 && !syncState.mergeFailedId && (
               <p>
                 {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} still need{syncState.pendingCount === 1 ? "s" : ""} to be saved to ELLA.
               </p>
@@ -242,6 +246,8 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                   ? "Some saved audio could not be read. Please contact the ELLA team."
                   : syncState.cleanupFailureCount > 0
                     ? "Audio was saved to ELLA, but cleanup needs another try."
+                    : syncState.mergeFailedId
+                      ? "Audio was uploaded, but processing could not finish. Please contact the ELLA team."
                     : "Upload could not finish. Please retry."}
               </p>
             )}

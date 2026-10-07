@@ -28,6 +28,7 @@ async function reconcileCompleted(session, native, target, sessionId) {
   if (session.mergeStatus === "failed") {
     const error = new Error("Audio was uploaded, but processing failed. Please contact the ELLA team.");
     error.discardable = false;
+    error.code = "merge_failed";
     throw error;
   }
   return false;
@@ -65,7 +66,7 @@ async function uploadWithRetry(api, sessionId, chunkIndex, blob, signal) {
 }
 
 // The native manifest owns upload progress; it is advanced only after the server confirms a chunk.
-export async function transferNativeRecording(recording, caregiverId, native, api, signal) {
+export async function transferNativeRecording(recording, caregiverId, native, api, signal, onUploadAccepted = () => {}) {
   if (recording.format !== "standalone" ||
       !Number.isSafeInteger(recording.nextChunkIndex) || recording.nextChunkIndex < 0 ||
       !Number.isSafeInteger(recording.segmentCount) || recording.segmentCount < recording.nextChunkIndex ||
@@ -85,6 +86,7 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
         throw new Error("Recording session belongs to a different caregiver or date.");
       }
       if (remote.status === "completed") {
+        onUploadAccepted(recording.id);
         return reconcileCompleted(remote, native, target, sessionId);
       }
       if (remote.status === "cancelled") {
@@ -152,6 +154,7 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
   if (completed.sessionId !== sessionId || completed.status !== "completed") {
     throw new Error("Recording completion was not confirmed.");
   }
+  onUploadAccepted(recording.id);
   const remote = mergedAudioIsReady(completed)
     ? completed
     : await api.getRecordingSession(sessionId, { signal });

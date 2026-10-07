@@ -67,14 +67,15 @@ export async function syncNativeRecordings(caregiverId) {
       const failedRecordings = [];
       for (const recording of recordings) {
         if (controller.signal.aborted) return;
-        publish(caregiverId, { status: "uploading", completedId: null });
+        publish(caregiverId, { status: "uploading", completedId: null, mergeFailedId: null });
         try {
           const finalized = await transferNativeRecording(
             recording,
             caregiverId,
             SegmentedAudio,
             recordingsApi,
-            controller.signal
+            controller.signal,
+            (recordingId) => publish(caregiverId, { acceptedId: recordingId })
           );
           if (finalized) {
             publish(caregiverId, {
@@ -91,6 +92,7 @@ export async function syncNativeRecordings(caregiverId) {
           publish(caregiverId, {
             status: "pending",
             error: error?.message || "Unable to upload saved audio.",
+            mergeFailedId: error?.code === "merge_failed" ? recording.id : null,
             failedRecordings: [...failedRecordings],
           });
           if (navigator.onLine === false) break;
