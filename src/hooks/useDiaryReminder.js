@@ -36,7 +36,7 @@ async function showReminder(slot, caregiverId) {
 
   const registration = await navigator.serviceWorker?.ready;
   const title = 'Diary Reminder';
-  const body = "Please complete today's Parent Diary questionnaire.";
+  const body = "Please complete today's Parent Diary.";
 
   if (registration) {
     await registration.showNotification(title, {

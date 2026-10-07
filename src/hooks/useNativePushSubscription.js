@@ -27,7 +27,9 @@ export function useNativePushSubscription(caregiverId) {
       registering = true;
       try {
         let permission = await PushNotifications.checkPermissions();
-        if (prompt && permission.receive === "prompt") permission = await PushNotifications.requestPermissions();
+        if (prompt && (permission.receive === "prompt" || permission.receive === "prompt-with-rationale")) {
+          permission = await PushNotifications.requestPermissions();
+        }
         if (!disposed && permission.receive === "granted") await PushNotifications.register();
       } catch (error) {
         if (!disposed) console.error("Unable to register native push:", error);
