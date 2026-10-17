@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1">
+      <stop stop-color="#f8f7f2"/>
+      <stop offset="1" stop-color="#eef4f0"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-30%" width="130%" height="170%">
+      <feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#16372b" flood-opacity=".08"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#688578"/>
+    </marker>
+    <style>
+      text { font-family: 'Avenir Next', 'Helvetica Neue', sans-serif; fill:#203a32; }
+      .heading { font-size:31px; font-weight:700; }
+      .label { font-size:23px; font-weight:700; }
+      .body { font-size:21px; fill:#62736b; }
+      .note { font-size:18px; fill:#62736b; }
+      .step { font-size:21px; font-weight:700; }
+      .white { fill:#fff; }
+      .line { stroke:#688578; stroke-width:3; fill:none; marker-end:url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1600" height="920" fill="url(#bg)"/>
+
+  <!-- Caregiver experience -->
+  <rect x="60" y="50" width="1480" height="245" rx="26" fill="#fff" filter="url(#shadow)"/>
+  <text x="91" y="102" class="heading">01 Caregiver Web + App</text>
+  <rect x="91" y="162" width="442" height="99" rx="18" fill="#f7e9e2"/>
+  <text x="116" y="201" class="label">Parent mode</text>
+  <text x="116" y="233" class="body">Parent-led stories; record audio</text>
+  <rect x="551" y="162" width="442" height="99" rx="18" fill="#e7eff8"/>
+  <text x="576" y="201" class="label">Robot mode</text>
+  <text x="576" y="233" class="body">Robot sessions, photos and progress</text>
+  <rect x="1011" y="162" width="485" height="99" rx="18" fill="#e3f1e9"/>
+  <text x="1036" y="201" class="label">Both modes</text>
+  <text x="1036" y="233" class="body">Daily diary and notifications</text>
+
+  <!-- Robot pipeline -->
+  <rect x="60" y="320" width="1480" height="245" rx="26" fill="#e7eff8" filter="url(#shadow)"/>
+  <text x="91" y="370" class="heading">02 Robot Content Pipeline</text>
+  <rect x="90" y="439" width="230" height="87" rx="17" fill="#fff"/>
+  <text x="205" y="475" class="step" text-anchor="middle">Story</text>
+  <text x="205" y="502" class="note" text-anchor="middle">Segmented script</text>
+  <path d="M 329 483 H 365" class="line"/>
+  <rect x="375" y="439" width="220" height="87" rx="17" fill="#fff"/>
+  <text x="485" y="475" class="step" text-anchor="middle">Facial expression</text>
+  <text x="485" y="502" class="note" text-anchor="middle">Per segment</text>
+  <path d="M 605 483 H 641" class="line"/>
+  <rect x="651" y="439" width="220" height="87" rx="17" fill="#fff"/>
+  <text x="761" y="475" class="step" text-anchor="middle">Body expression</text>
+  <text x="761" y="502" class="note" text-anchor="middle">Uses facial output</text>
+  <path d="M 881 483 H 917" class="line"/>
+  <rect x="927" y="439" width="235" height="87" rx="17" fill="#fff"/>
+  <text x="1044" y="475" class="step" text-anchor="middle">ROS-ready JSON</text>
+  <text x="1044" y="502" class="note" text-anchor="middle">LLM translation</text>
+  <path d="M 1172 483 H 1208" class="line"/>
+  <rect x="1218" y="439" width="278" height="87" rx="17" fill="#315f87"/>
+  <text x="1357" y="475" class="step white" text-anchor="middle">Robot session</text>
+  <text x="1357" y="502" class="note white" text-anchor="middle">Interaction and photos</text>
+
+  <!-- Study sequence -->
+  <rect x="60" y="590" width="1480" height="280" rx="26" fill="#fff" filter="url(#shadow)"/>
+  <text x="91" y="642" class="heading">03 Six-Week Study Sequence</text>
+  <text x="91" y="675" class="note">A separate PPVT webpage is used for vocabulary testing before and after each mode.</text>
+  <line x1="181" y1="783" x2="804" y2="783" stroke="#e9b5a4" stroke-width="7" stroke-linecap="round"/>
+  <line x1="804" y1="783" x2="1428" y2="783" stroke="#abc8e5" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="181" cy="783" r="11" fill="#1b5e4b"/>
+  <circle cx="804" cy="783" r="11" fill="#1b5e4b"/>
+  <circle cx="1428" cy="783" r="11" fill="#1b5e4b"/>
+  <rect x="93" y="733" width="176" height="36" rx="18" fill="#e3f1e9"/>
+  <text x="181" y="758" text-anchor="middle" font-size="19" font-weight="700">PPVT baseline</text>
+  <rect x="384" y="733" width="218" height="36" rx="18" fill="#f7e9e2"/>
+  <text x="493" y="758" text-anchor="middle" font-size="19" font-weight="700">Parent · 2 weeks</text>
+  <rect x="699" y="733" width="210" height="36" rx="18" fill="#e3f1e9"/>
+  <text x="804" y="758" text-anchor="middle" font-size="19" font-weight="700">PPVT transition</text>
+  <rect x="1009" y="733" width="216" height="36" rx="18" fill="#e7eff8"/>
+  <text x="1117" y="758" text-anchor="middle" font-size="19" font-weight="700">Robot · 4 weeks</text>
+  <rect x="1352" y="733" width="152" height="36" rx="18" fill="#e3f1e9"/>
+  <text x="1428" y="758" text-anchor="middle" font-size="19" font-weight="700">PPVT final</text>
+  <text x="181" y="831" class="note" text-anchor="middle">Before Parent</text>
+  <text x="804" y="831" class="note" text-anchor="middle">After Parent / before Robot</text>
+  <text x="1428" y="831" class="note" text-anchor="middle">After Robot</text>
+</svg>
