@@ -4,4 +4,7 @@
     <string name="title_activity_main">ELLA</string>
     <string name="package_name">com.ella.parentportal</string>
     <string name="custom_url_scheme">com.ella.parentportal</string>
+    <string name="diary_reminder_channel_id">ella_diary_reminders</string>
+    <string name="diary_reminder_channel_name">Diary Reminder</string>
+    <string name="diary_reminder_channel_description">Daily Parent Diary reminders</string>
 </resources>
