@@ -521,7 +521,8 @@ function formatWeeklyCurrentValue(condition, rawValue) {
 
   const numeric = Number(rawValue);
   if (condition === "robot") return String(Math.round(numeric));
-  return numeric % 1 === 0 ? String(numeric.toFixed(0)) : String(numeric.toFixed(1));
+  if (numeric > 0 && numeric < 1) return "<1";
+  return String(Math.floor(numeric));
 }
 
 function formatWeeklyTargetValue(targetValue, unit) {
