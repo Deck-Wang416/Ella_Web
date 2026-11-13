@@ -4,12 +4,13 @@ import { SegmentedAudio } from "../lib/nativeSegmentedAudioApi.js";
 import { formatTodayDate } from "../lib/dailyApi.js";
 import * as recordingsApi from "../lib/recordingsApi.js";
 import { discardSavedRecording } from "../lib/nativeRecordingDiscard.js";
+import { hasUnacceptedNativeRecording } from "../lib/nativeRecordingGate.js";
+import { recordingStarted, recordingStopped, recordingStopRequested } from "../lib/nativeRecordingPerf.js";
 import {
   getNativeRecordingSyncState,
   pauseNativeRecordingSync,
   resumeNativeRecordingSync,
   subscribeNativeRecordingSync,
-  syncNativeRecordings,
 } from "../lib/nativeRecordingSync.js";
 
 function formatElapsed(totalSeconds) {
@@ -24,8 +25,12 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
   const [latestRecording, setLatestRecording] = useState(null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
+  const [awaitingUploadAck, setAwaitingUploadAck] = useState(null);
   const [syncState, setSyncState] = useState(() => getNativeRecordingSyncState(caregiverId));
   const busy = status === "recording" || working;
+  const startBlocked = !syncState.uploadCheckComplete || syncState.pendingUploadCount > 0 ||
+    syncState.unreadableCount > 0 ||
+    (awaitingUploadAck && awaitingUploadAck !== syncState.acceptedId);
   const actionPendingRef = useRef(false);
 
   const applyNativeStatus = useCallback((next) => {
@@ -34,6 +39,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     if (next.recording) setLatestRecording(next.recording);
     else if (next.status !== "recording") setLatestRecording(next.latestRecording ?? null);
     if (next.status === "interrupted") {
+      if (next.recording) setAwaitingUploadAck(next.recording.id);
       setError(next.recording || next.latestRecording
         ? ""
         : next.error || "No audio was captured. Please try again.");
@@ -46,6 +52,9 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     const unsubscribe = subscribeNativeRecordingSync((id, state) => {
       if (id !== caregiverId) return;
       setSyncState(state);
+      if (state.acceptedId) {
+        setAwaitingUploadAck((current) => current === state.acceptedId ? null : current);
+      }
       if (state.completedId) {
         if (!cancelled) {
           setLatestRecording((current) => current?.id === state.completedId ? { ...current, uploaded: true } : current);
@@ -64,6 +73,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     setStatus("idle");
     setElapsedSeconds(0);
     setLatestRecording(null);
+    setAwaitingUploadAck(null);
     setError("");
 
     async function connect() {
@@ -135,7 +145,10 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     setError("");
     try {
       if (status === "recording") {
+        recordingStopRequested(caregiverId);
         const result = await SegmentedAudio.stop({ caregiverId });
+        recordingStopped(caregiverId, result.recording);
+        setAwaitingUploadAck(result.recording.id);
         setStatus(result.status);
         setElapsedSeconds(Math.floor(result.recording.durationSeconds));
         setLatestRecording(result.recording);
@@ -144,7 +157,12 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
           setError("The date has changed. Please reopen Dashboard before recording.");
           return;
         }
+        if (await hasUnacceptedNativeRecording(caregiverId, SegmentedAudio, recordingsApi)) {
+          setError("Please finish uploading or discard the previous recording before starting another.");
+          return;
+        }
         const result = await SegmentedAudio.start({ caregiverId, date });
+        recordingStarted(caregiverId);
         setStatus(result.status);
         setElapsedSeconds(0);
         setLatestRecording(null);
@@ -199,12 +217,12 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         <button
           type="button"
           onClick={toggleRecording}
-          disabled={!enabled || working}
+          disabled={!enabled || working || (status !== "recording" && startBlocked)}
           className={`flex h-36 w-36 items-center justify-center rounded-full border-8 transition ${
             status === "recording"
               ? "border-red-200 bg-red-500 text-white"
               : "border-brand-200 bg-brand-500 text-white"
-          } ${!enabled || working ? "cursor-not-allowed opacity-50" : ""}`}
+          } ${!enabled || working || (status !== "recording" && startBlocked) ? "cursor-not-allowed opacity-50" : ""}`}
           aria-label={status === "recording" ? "Stop recording" : "Start recording"}
         >
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 text-base font-semibold">
@@ -212,19 +230,25 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
           </span>
         </button>
 
+        {status !== "recording" && startBlocked && (
+          <p className="text-sm text-ink-500">
+            {syncState.uploadCheckComplete
+              ? "Finish saving the previous recording before starting another."
+              : "Checking saved recordings..."}
+          </p>
+        )}
+
         <p className="font-display text-4xl">{formatElapsed(elapsedSeconds)}</p>
         <p className="text-sm text-ink-600">
           {status === "recording"
             ? "Recording"
-            : latestRecording?.uploaded
-              ? "Saved to ELLA"
-              : latestRecording?.id === syncState.mergeFailedId
-                ? "Recording needs attention"
-              : latestRecording?.id === syncState.acceptedId
-                ? "Recording uploaded to ELLA"
+            : latestRecording?.id === syncState.mergeFailedId
+              ? "Recording needs attention"
+              : latestRecording && (latestRecording.uploaded || latestRecording.id === syncState.acceptedId)
+              ? "Recording uploaded to ELLA"
               : latestRecording || syncState.pendingCount > 0
-                ? "Saving to ELLA"
-                : "Ready to record"}
+              ? "Saving to ELLA"
+              : "Ready to record"}
         </p>
 
         {status === "interrupted" && latestRecording && !latestRecording.uploaded && (
@@ -248,27 +272,26 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                     ? "Audio was saved to ELLA, but cleanup needs another try."
                     : syncState.mergeFailedId
                       ? "Audio was uploaded, but processing could not finish. Please contact the ELLA team."
-                    : "Upload could not finish. Please retry."}
+                    : "We'll keep trying to save this recording while the app is open. If this persists, contact the ELLA team."}
               </p>
             )}
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              <button type="button" className="btn-ghost" disabled={working} onClick={() => void syncNativeRecordings(caregiverId)}>
-                Retry upload
-              </button>
-              {(syncState.failedRecordings || [])
-                .filter((recording) => recording.stopped)
-                .map((recording, index, items) => (
-                  <button
-                    key={recording.id}
-                    type="button"
-                    className="btn-ghost border-red-200 text-red-600 hover:border-red-400 hover:text-red-700"
-                    disabled={working}
-                    onClick={() => void discardUpload(recording)}
-                  >
-                    {items.length === 1 ? "Discard upload" : `Discard recording ${index + 1}`}
-                  </button>
-                ))}
-            </div>
+            {(syncState.failedRecordings || []).length > 0 && (
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                {(syncState.failedRecordings || [])
+                  .filter((recording) => recording.stopped)
+                  .map((recording, index, items) => (
+                    <button
+                      key={recording.id}
+                      type="button"
+                      className="btn-ghost border-red-200 text-red-600 hover:border-red-400 hover:text-red-700"
+                      disabled={working}
+                      onClick={() => void discardUpload(recording)}
+                    >
+                      {items.length === 1 ? "Discard upload" : `Discard recording ${index + 1}`}
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
         )}
         {error && (

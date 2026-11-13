@@ -7,6 +7,7 @@ const listeners = new Set();
 const running = new Map();
 const snapshots = new Map();
 const pausedCaregivers = new Set();
+const acceptedIdsByCaregiver = new Map();
 
 function publish(caregiverId, state) {
   const next = { ...snapshots.get(caregiverId), ...state };
@@ -20,7 +21,7 @@ export function subscribeNativeRecordingSync(listener) {
 }
 
 export function getNativeRecordingSyncState(caregiverId) {
-  return snapshots.get(caregiverId) ?? { status: "idle", pendingCount: 0, error: "" };
+  return snapshots.get(caregiverId) ?? { status: "idle", pendingCount: 0, pendingUploadCount: 0, uploadCheckComplete: false, error: "" };
 }
 
 export function cancelNativeRecordingSync(caregiverId) {
@@ -56,12 +57,28 @@ export async function syncNativeRecordings(caregiverId) {
     try {
       const current = await SegmentedAudio.getPendingUploads({ caregiverId });
       const recordings = current.recordings || [];
+      const acceptedIds = acceptedIdsByCaregiver.get(caregiverId) ?? new Set();
+      acceptedIdsByCaregiver.set(caregiverId, acceptedIds);
+      const localIds = new Set(recordings.map((recording) => recording.id));
+      for (const id of acceptedIds) {
+        if (!localIds.has(id)) acceptedIds.delete(id);
+      }
+      const pendingUploadCount = () => recordings.filter(
+        (recording) => recording.stopped && !acceptedIds.has(recording.id)
+      ).length;
       const unreadableCount = current.unreadableCount || 0;
       const cleanupFailureCount = current.cleanupFailureCount || 0;
       const scanError = unreadableCount > 0
         ? "Some local recordings could not be read."
         : cleanupFailureCount > 0 ? "Uploaded audio could not be removed from this device." : "";
-      publish(caregiverId, { pendingCount: recordings.length, unreadableCount, cleanupFailureCount, error: scanError });
+      publish(caregiverId, {
+        pendingCount: recordings.length,
+        pendingUploadCount: pendingUploadCount(),
+        uploadCheckComplete: true,
+        unreadableCount,
+        cleanupFailureCount,
+        error: scanError,
+      });
       let hadError = unreadableCount > 0 || cleanupFailureCount > 0;
       let unfinishedStatus = null;
       const failedRecordings = [];
@@ -75,7 +92,10 @@ export async function syncNativeRecordings(caregiverId) {
             SegmentedAudio,
             recordingsApi,
             controller.signal,
-            (recordingId) => publish(caregiverId, { acceptedId: recordingId })
+            (recordingId) => {
+              acceptedIds.add(recordingId);
+              publish(caregiverId, { acceptedId: recordingId, pendingUploadCount: pendingUploadCount() });
+            }
           );
           if (finalized) {
             publish(caregiverId, {

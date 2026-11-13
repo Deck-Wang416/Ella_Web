@@ -1,3 +1,10 @@
+import {
+  chunkUploadConfirmed,
+  chunkUploadFailed,
+  recordingCompleteConfirmed,
+  recordingCompleteRequested,
+} from "./nativeRecordingPerf.js";
+
 const RETRY_DELAYS_MS = [1000, 2500];
 
 function assertNotAborted(signal) {
@@ -52,12 +59,13 @@ function wait(ms, signal) {
   });
 }
 
-async function uploadWithRetry(api, sessionId, chunkIndex, blob, signal) {
+async function uploadWithRetry(api, sessionId, chunkIndex, blob, signal, recordingId) {
   for (let attempt = 0; ; attempt += 1) {
     assertNotAborted(signal);
     try {
       return await api.uploadRecordingChunk(sessionId, chunkIndex, blob, { signal });
     } catch (error) {
+      chunkUploadFailed(recordingId, chunkIndex, attempt + 1, error?.status);
       const retryable = !Number.isInteger(error?.status) || error.status >= 500;
       if (!retryable || attempt >= RETRY_DELAYS_MS.length) throw error;
       await wait(RETRY_DELAYS_MS[attempt], signal);
@@ -128,8 +136,9 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
       throw new Error("Saved audio chunk does not match upload progress.");
     }
     let result;
+    const uploadStartedAt = Date.now();
     try {
-      result = await uploadWithRetry(api, sessionId, nextChunkIndex, blob, signal);
+      result = await uploadWithRetry(api, sessionId, nextChunkIndex, blob, signal, recording.id);
     } catch (error) {
       const failure = new Error(error?.message || "Audio upload failed", { cause: error });
       failure.status = error?.status;
@@ -141,6 +150,7 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
       throw new Error("Unexpected recording chunk response.");
     }
     await native.confirmUploadChunk({ ...target, sessionId, chunkIndex: nextChunkIndex, byteCount: chunk.byteCount });
+    chunkUploadConfirmed(recording, nextChunkIndex, chunk.byteCount, Date.now() - uploadStartedAt);
     nextChunkIndex += 1;
   }
 
@@ -150,10 +160,13 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
     throw new Error("Saved audio is incomplete.");
   }
   const durationSeconds = Math.max(1, Math.ceil(recording.durationSeconds));
+  recordingCompleteRequested(recording.id);
+  const completeStartedAt = Date.now();
   const completed = await api.completeRecordingSession(sessionId, nextChunkIndex - 1, durationSeconds, { signal });
   if (completed.sessionId !== sessionId || completed.status !== "completed") {
     throw new Error("Recording completion was not confirmed.");
   }
+  recordingCompleteConfirmed(recording.id, Date.now() - completeStartedAt);
   onUploadAccepted(recording.id);
   const remote = mergedAudioIsReady(completed)
     ? completed
