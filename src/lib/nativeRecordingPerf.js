@@ -1,15 +1,29 @@
+import { flushRecordingPerf, flushSavedRecordingPerf, queueRecordingPerf } from "./nativeRecordingPerfUpload.js";
+
 const enabled = import.meta.env?.VITE_RECORDING_PERF === "true";
 const active = new Map();
 const recordings = new Map();
-const PROGRESS_INTERVAL_MS = 5 * 60 * 1000;
+const interruptions = new Set();
 
 function log(event, details) {
-  if (enabled) console.info("[Recording perf]", event, { at: new Date().toISOString(), ...details });
+  if (!enabled) return;
+  const at = new Date().toISOString();
+  console.info("[Recording perf]", event, { at, ...details });
+  if (details.recordingId) queueRecordingPerf(details.recordingId, event, details);
+}
+
+export function uploadRecordingPerfLog(recordingId, sessionId, caregiverId, force = false) {
+  if (enabled) return flushRecordingPerf(recordingId, sessionId, caregiverId, force);
+  return Promise.resolve();
+}
+
+export function uploadSavedRecordingPerfLogs(caregiverId) {
+  if (enabled) flushSavedRecordingPerf(caregiverId);
 }
 
 function metrics(id) {
   if (!recordings.has(id)) {
-    recordings.set(id, { bytes: 0, chunks: 0, retries: 0, uploadMs: 0, lastProgressAt: 0 });
+    recordings.set(id, { bytes: 0, chunks: 0, retries: 0, requestMs: 0, totalMs: 0 });
   }
   return recordings.get(id);
 }
@@ -42,33 +56,51 @@ export function recordingStopped(caregiverId, recording) {
   });
 }
 
-export function chunkUploadFailed(recordingId, chunkIndex, attempt, status) {
-  if (!enabled) return;
-  metrics(recordingId).retries += 1;
-  log("chunk upload failed", { recordingId, chunkIndex, attempt, status: status ?? "network error" });
+export function recordingInterrupted(caregiverId, recording) {
+  if (!enabled || interruptions.has(recording.id)) return;
+  interruptions.add(recording.id);
+  const current = active.get(caregiverId);
+  Object.assign(metrics(recording.id), current);
+  active.delete(caregiverId);
+  log("interrupted", {
+    recordingId: recording.id,
+    durationSeconds: recording.durationSeconds,
+    totalChunks: recording.segmentCount,
+    uploadedChunks: recording.nextChunkIndex,
+  });
 }
 
-export function chunkUploadConfirmed(recording, chunkIndex, byteCount, uploadMs) {
+export function chunkUploadStarted(recordingId, chunkIndex, attempt, sizeBytes) {
+  log("chunk request started", { recordingId, chunkIndex, attempt, sizeBytes });
+}
+
+export function chunkUploadFailed(recordingId, chunkIndex, attempt, status, requestMs) {
+  if (!enabled) return;
+  metrics(recordingId).retries += 1;
+  log("chunk request failed", {
+    recordingId, chunkIndex, attempt, status: status ?? "network error", requestMs: Math.round(requestMs),
+  });
+}
+
+export function chunkUploadConfirmed(recording, chunkIndex, byteCount, timing) {
   if (!enabled) return;
   const current = metrics(recording.id);
   current.bytes += byteCount;
   current.chunks += 1;
-  current.uploadMs += uploadMs;
-  const now = Date.now();
-  if (current.chunks === 1 || now - current.lastProgressAt >= PROGRESS_INTERVAL_MS ||
-      (recording.stopped && chunkIndex === recording.segmentCount - 1)) {
-    current.lastProgressAt = now;
-    log("upload progress", {
-      recordingId: recording.id,
-      confirmedChunks: chunkIndex + 1,
-      totalChunksAtScan: recording.segmentCount,
-      pendingChunksAtScan: recording.segmentCount - chunkIndex - 1,
-      uploadedBytesThisRun: current.bytes,
-      meanUploadMs: Math.round(current.uploadMs / current.chunks),
-      failedAttempts: current.retries,
-      secondsSinceStop: current.stopRequestedAt ? Math.round((now - current.stopRequestedAt) / 1000) : null,
-    });
-  }
+  current.requestMs += timing.requestMs;
+  current.totalMs += timing.totalMs;
+  log("chunk confirmed", {
+    recordingId: recording.id,
+    chunkIndex,
+    sizeBytes: byteCount,
+    sealedChunksAtScan: recording.segmentCount,
+    readMs: Math.round(timing.readMs),
+    decodeMs: Math.round(timing.decodeMs),
+    requestMs: Math.round(timing.requestMs),
+    confirmMs: Math.round(timing.confirmMs),
+    totalMs: Math.round(timing.totalMs),
+    attempts: timing.attempts,
+  });
 }
 
 export function recordingCompleteRequested(recordingId) {
@@ -86,6 +118,8 @@ export function recordingCompleteConfirmed(recordingId, completeMs) {
     completeMs,
     uploadedChunksThisRun: current.chunks,
     uploadedBytesThisRun: current.bytes,
+    meanRequestMs: current.chunks ? Math.round(current.requestMs / current.chunks) : null,
+    meanTotalMs: current.chunks ? Math.round(current.totalMs / current.chunks) : null,
     failedAttempts: current.retries,
   });
   recordings.delete(recordingId);

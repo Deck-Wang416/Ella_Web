@@ -2,6 +2,7 @@ import { nativeAudioSupported } from "./nativeAudioApi.js";
 import { SegmentedAudio } from "./nativeSegmentedAudioApi.js";
 import * as recordingsApi from "./recordingsApi.js";
 import { transferNativeRecording } from "./nativeRecordingTransfer.js";
+import { uploadSavedRecordingPerfLogs } from "./nativeRecordingPerf.js";
 
 const listeners = new Set();
 const running = new Map();
@@ -42,6 +43,7 @@ export function resumeNativeRecordingSync(caregiverId) {
 
 export async function syncNativeRecordings(caregiverId) {
   if (!nativeAudioSupported || !caregiverId || pausedCaregivers.has(caregiverId)) return;
+  uploadSavedRecordingPerfLogs(caregiverId);
   if (running.has(caregiverId)) {
     const active = running.get(caregiverId);
     if (active.controller.signal.aborted) {
