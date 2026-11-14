@@ -52,6 +52,7 @@ function setup({ size = 7, chunkSize = 3 } = {}) {
       return {
         sessionId: "rec_test", caregiverId: 1, date: recording.date,
         chunkFormat: "standalone", status: remoteStatus,
+        uploadedChunks: recording.segmentCount, lastChunkIndex: recording.segmentCount - 1,
         mergeStatus, finalAudio: mergeStatus === "completed" ? { storagePath: "audio/test/recording.m4a" } : null,
       };
     },
@@ -62,7 +63,8 @@ function setup({ size = 7, chunkSize = 3 } = {}) {
     async completeRecordingSession(sessionId, finalChunkIndex, durationSeconds) {
       calls.completed.push({ finalChunkIndex, durationSeconds });
       remoteStatus = "completed";
-      return { sessionId, status: "completed", mergeStatus: "pending" };
+      return { sessionId, status: "completed", mergeStatus: "pending",
+        uploadedChunks: finalChunkIndex + 1, lastChunkIndex: finalChunkIndex };
     },
   };
   return {
@@ -116,6 +118,21 @@ test("completed remote session is reconciled without calling complete twice", as
   assert.equal(fixture.calls.completed.length, 0);
   assert.equal(fixture.manifest.uploaded, true);
   assert.equal(fixture.calls.deleted, 1);
+});
+
+test("a completed session with missing chunks cannot delete local audio", async () => {
+  const fixture = setup();
+  fixture.manifest.sessionId = "rec_test";
+  fixture.setRemoteStatus("completed");
+  fixture.api.getRecordingSession = async () => ({
+    caregiverId: 1, date: fixture.recording.date, chunkFormat: "standalone", status: "completed",
+    uploadedChunks: 1, lastChunkIndex: 0,
+  });
+  await assert.rejects(
+    transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api),
+    /does not match this audio/
+  );
+  assert.equal(fixture.calls.deleted, 0);
 });
 
 test("missing server session restarts upload from the saved local file", async () => {
@@ -221,7 +238,7 @@ test("failed completion retains local audio until the server confirms it", async
   assert.equal(fixture.calls.deleted, 1);
 });
 
-test("completed session retains local audio until the final merged file exists", async () => {
+test("completed session removes local audio without waiting for the merged file", async () => {
   const fixture = setup();
   fixture.setMergeStatus("pending");
   const accepted = [];
@@ -229,14 +246,9 @@ test("completed session retains local audio until the final merged file exists",
     fixture.recording, 1, fixture.native, fixture.api, undefined,
     (recordingId) => accepted.push(recordingId)
   );
-  assert.equal(first, false);
-  assert.equal(fixture.calls.deleted, 0);
-  assert.deepEqual(accepted, [fixture.recording.id]);
-
-  fixture.setMergeStatus("completed");
-  const second = await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api);
-  assert.equal(second, true);
+  assert.equal(first, true);
   assert.equal(fixture.calls.deleted, 1);
+  assert.deepEqual(accepted, [fixture.recording.id]);
   assert.equal(fixture.calls.completed.length, 1);
 });
 
@@ -253,13 +265,13 @@ test("upload acceptance is restored from a completed session after reopening", a
     undefined, (recordingId) => accepted.push(recordingId)
   );
 
-  assert.equal(finalized, false);
+  assert.equal(finalized, true);
   assert.deepEqual(accepted, [fixture.recording.id]);
   assert.equal(fixture.calls.completed.length, 0);
-  assert.equal(fixture.calls.deleted, 0);
+  assert.equal(fixture.calls.deleted, 1);
 });
 
-test("verified merge permits cleanup after a lost local final acknowledgement", async () => {
+test("completed session permits cleanup after a lost local final acknowledgement", async () => {
   const fixture = setup();
   fixture.manifest.sessionId = "rec_test";
   fixture.manifest.nextChunkIndex = 2;
@@ -276,16 +288,14 @@ test("verified merge permits cleanup after a lost local final acknowledgement", 
   assert.equal(fixture.calls.uploaded.length, 0);
 });
 
-test("failed merge retains local audio", async () => {
+test("completed upload cleans local audio even if later merge fails", async () => {
   const fixture = setup();
   fixture.manifest.sessionId = "rec_test";
+  fixture.manifest.nextChunkIndex = fixture.recording.segmentCount;
   fixture.setRemoteStatus("completed");
   fixture.setMergeStatus("failed");
-  await assert.rejects(
-    transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api),
-    (error) => error.discardable === false && error.code === "merge_failed"
-  );
-  assert.equal(fixture.calls.deleted, 0);
+  assert.equal(await transferNativeRecording({ ...fixture.recording, ...fixture.manifest }, 1, fixture.native, fixture.api), true);
+  assert.equal(fixture.calls.deleted, 1);
 });
 
 test("failed local cleanup of a completed session is not offered for cancellation", async () => {
@@ -319,6 +329,7 @@ test("standalone segments upload during recording and complete only after stop",
   fixture.api.getRecordingSession = async () => ({
     sessionId: "rec_test", caregiverId: 1, date: recording.date, chunkFormat: "standalone",
     status: remoteStatus, mergeStatus: "completed", finalAudio: { storagePath: "audio/test/recording.m4a" },
+    uploadedChunks: recording.segmentCount, lastChunkIndex: recording.segmentCount - 1,
   });
   const complete = fixture.api.completeRecordingSession;
   fixture.api.completeRecordingSession = async (...args) => {
@@ -358,6 +369,7 @@ test("an auto-stopped recording retains unsent segments and completes after retr
   fixture.api.getRecordingSession = async () => ({
     caregiverId: 1, date: recording.date, chunkFormat: "standalone", status: remoteStatus,
     mergeStatus: "completed", finalAudio: { storagePath: "audio/test/recording.m4a" },
+    uploadedChunks: recording.segmentCount, lastChunkIndex: recording.segmentCount - 1,
   });
   const upload = fixture.api.uploadRecordingChunk;
   let fail = true;

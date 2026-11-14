@@ -33,10 +33,14 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
   const actionPendingRef = useRef(false);
 
   const applyNativeStatus = useCallback((next) => {
-    setStatus(next.status);
-    setElapsedSeconds(Math.floor(next.elapsedSeconds ?? 0));
+    setStatus((current) => next.status === "idle" && current === "uploaded" ? current : next.status);
+    setElapsedSeconds((current) => next.status === "uploaded"
+      ? Math.floor(next.latestRecording?.durationSeconds ?? current)
+      : next.status === "idle" && next.latestRecording == null ? current : Math.floor(next.elapsedSeconds ?? 0));
     if (next.recording) setLatestRecording(next.recording);
-    else if (next.status !== "recording") setLatestRecording(next.latestRecording ?? null);
+    else if (next.status !== "recording") {
+      setLatestRecording((current) => next.latestRecording ?? (current?.uploaded ? current : null));
+    }
     if (next.status === "interrupted") {
       if (next.recording) setAwaitingUploadAck(next.recording.id);
       setError(next.recording || next.latestRecording
@@ -238,9 +242,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         <p className="text-sm text-ink-600">
           {status === "recording"
             ? "Recording"
-            : latestRecording?.id === syncState.mergeFailedId
-              ? "Recording needs attention"
-              : latestRecording && (latestRecording.uploaded || latestRecording.id === syncState.acceptedId)
+            : latestRecording && (latestRecording.uploaded || latestRecording.id === syncState.acceptedId)
               ? "Recording uploaded to ELLA"
               : latestRecording || syncState.pendingCount > 0
               ? "Saving to ELLA"
@@ -255,7 +257,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         {(syncState.status === "pending" || (syncState.failedRecordings || []).length > 0) &&
           (syncState.pendingCount > 0 || syncState.error) && (
           <div className="w-full rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {syncState.pendingCount > 0 && !syncState.mergeFailedId && (
+            {syncState.pendingCount > 0 && (
               <p>
                 {syncState.pendingCount} recording{syncState.pendingCount === 1 ? "" : "s"} still need{syncState.pendingCount === 1 ? "s" : ""} to be saved to ELLA.
               </p>
@@ -266,8 +268,6 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
                   ? "Some saved audio could not be read. Please contact the ELLA team."
                   : syncState.cleanupFailureCount > 0
                     ? "Audio was saved to ELLA, but cleanup needs another try."
-                    : syncState.mergeFailedId
-                      ? "Audio was uploaded, but processing could not finish. Please contact the ELLA team."
                     : "We'll keep trying to save this recording while the app is open. If this persists, contact the ELLA team."}
               </p>
             )}

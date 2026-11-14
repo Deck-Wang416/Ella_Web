@@ -28,6 +28,15 @@ export function getNativeRecordingSyncState(caregiverId) {
   return snapshots.get(caregiverId) ?? { status: "idle", pendingCount: 0, pendingUploadCount: 0, uploadCheckComplete: false, error: "" };
 }
 
+export function markNativeRecordingUploaded(caregiverId, recordingId) {
+  const accepted = acceptedIdsByCaregiver.get(caregiverId) ?? new Set();
+  if (accepted.has(recordingId)) return;
+  accepted.add(recordingId);
+  acceptedIdsByCaregiver.set(caregiverId, accepted);
+  const pending = getNativeRecordingSyncState(caregiverId).pendingUploadCount;
+  publish(caregiverId, { acceptedId: recordingId, pendingUploadCount: Math.max(0, pending - 1) });
+}
+
 export function cancelNativeRecordingSync(caregiverId) {
   running.get(caregiverId)?.controller.abort();
 }
@@ -92,7 +101,7 @@ export async function syncNativeRecordings(caregiverId) {
       const failedRecordings = [];
       for (const recording of recordings) {
         if (controller.signal.aborted) return;
-        publish(caregiverId, { status: "uploading", completedId: null, mergeFailedId: null });
+        publish(caregiverId, { status: "uploading", completedId: null });
         try {
           const finalized = await (iosNativeUpload ? reconcileIOSRecording : transferNativeRecording)(
             recording,
@@ -122,7 +131,6 @@ export async function syncNativeRecordings(caregiverId) {
           publish(caregiverId, {
             status: "pending",
             error: error?.message || "Unable to upload saved audio.",
-            mergeFailedId: error?.code === "merge_failed" ? recording.id : null,
             failedRecordings: [...failedRecordings],
           });
           if (navigator.onLine === false) break;

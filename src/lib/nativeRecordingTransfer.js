@@ -10,28 +10,15 @@ function toBlob(base64, mimeType) {
   return new Blob([bytes], { type: mimeType });
 }
 
-function mergedAudioIsReady(session) {
-  return session.mergeStatus === "completed" && Boolean(session.finalAudio?.storagePath);
-}
-
 async function reconcileCompleted(session, native, target, sessionId) {
-  if (mergedAudioIsReady(session)) {
-    try {
-      await native.deleteUploadedRecording({ ...target, sessionId });
-    } catch (cause) {
-      const error = new Error(cause?.message || "Unable to remove uploaded audio from this device.", { cause });
-      error.discardable = false;
-      throw error;
-    }
-    return true;
-  }
-  if (session.mergeStatus === "failed") {
-    const error = new Error("Audio was uploaded, but processing failed. Please contact the ELLA team.");
+  try {
+    await native.deleteUploadedRecording({ ...target, sessionId });
+  } catch (cause) {
+    const error = new Error(cause?.message || "Unable to remove uploaded audio from this device.", { cause });
     error.discardable = false;
-    error.code = "merge_failed";
     throw error;
   }
-  return false;
+  return true;
 }
 
 function wait(ms, signal) {
@@ -86,6 +73,10 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
         throw new Error("Recording session belongs to a different caregiver or date.");
       }
       if (remote.status === "completed") {
+        if (remote.uploadedChunks !== recording.segmentCount ||
+            remote.lastChunkIndex !== recording.segmentCount - 1) {
+          throw new Error("Completed session does not match this audio.");
+        }
         onUploadAccepted(recording.id);
         return reconcileCompleted(remote, native, target, sessionId);
       }
@@ -151,12 +142,11 @@ export async function transferNativeRecording(recording, caregiverId, native, ap
   }
   const durationSeconds = Math.max(1, Math.ceil(recording.durationSeconds));
   const completed = await api.completeRecordingSession(sessionId, nextChunkIndex - 1, durationSeconds, { signal });
-  if (completed.sessionId !== sessionId || completed.status !== "completed") {
+  if (completed.sessionId !== sessionId || completed.status !== "completed" ||
+      completed.uploadedChunks !== recording.segmentCount ||
+      completed.lastChunkIndex !== recording.segmentCount - 1) {
     throw new Error("Recording completion was not confirmed.");
   }
   onUploadAccepted(recording.id);
-  const remote = mergedAudioIsReady(completed)
-    ? completed
-    : await api.getRecordingSession(sessionId, { signal });
-  return reconcileCompleted(remote, native, target, sessionId);
+  return reconcileCompleted(completed, native, target, sessionId);
 }

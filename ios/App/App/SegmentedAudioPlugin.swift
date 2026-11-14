@@ -68,8 +68,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         CAPPluginMethod(name: "syncUploads", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pauseUpload", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resumeUpload", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "discardRecording", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "deleteUploadedRecording", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "discardRecording", returnType: CAPPluginReturnPromise)
     ]
 
     private typealias Manifest = RecordingManifest
@@ -93,6 +92,15 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
             self, selector: #selector(audioInterrupted(_:)),
             name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
         )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(recordingUploadCompleted(_:)),
+            name: .ellaRecordingUploadCompleted, object: nil
+        )
+    }
+
+    @objc private func recordingUploadCompleted(_ notification: Notification) {
+        guard let manifest = notification.object as? Manifest else { return }
+        notifyListeners("recordingStateChanged", data: ["status": "uploaded", "latestRecording": summary(manifest)])
     }
 
     deinit { NotificationCenter.default.removeObserver(self) }
@@ -361,7 +369,12 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
                 var manifest = original
                 // Enumerated directory URLs may not equal the URL used at creation time.
                 let isActive = engine != nil && currentManifest?.id == manifest.id
-                if manifest.uploaded {
+                if manifest.uploaded || manifest.uploadCompleted == true {
+                    if !manifest.uploaded {
+                        manifest.uploaded = true
+                        do { try save(manifest, directory) }
+                        catch { cleanupFailureCount += 1; continue }
+                    }
                     do { try FileManager.default.removeItem(at: directory) }
                     catch { cleanupFailureCount += 1 }
                     continue
@@ -432,35 +445,6 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
                 interruptedRecordingID = nil
                 captureFailure = nil
             }
-            call.resolve()
-        } catch { call.reject(error.localizedDescription, nil, error) }
-    }
-
-    @objc func deleteUploadedRecording(_ call: CAPPluginCall) { changeManifest(call) { manifest, _ in
-        // JS calls this only after the backend confirms verified final audio. A crash may have
-        // lost the last local acknowledgement even though the server merged every segment.
-        guard manifest.stopped, manifest.sessionId == call.getString("sessionId") else {
-            throw self.failure("Audio is not finalized.")
-        }
-        manifest.uploaded = true
-    } afterSave: { directory in
-        try FileManager.default.removeItem(at: directory)
-        if self.interruptedRecordingID == call.getString("id") {
-            self.interrupted = false
-            self.interruptedRecordingID = nil
-            self.captureFailure = nil
-        }
-    } }
-
-    private func changeManifest(_ call: CAPPluginCall, change: (inout Manifest, URL) throws -> Void,
-                                afterSave: ((URL) throws -> Void)? = nil) {
-        lock.lock(); defer { lock.unlock() }
-        do {
-            let (directory, original) = try target(call)
-            var manifest = original
-            try change(&manifest, directory)
-            try save(manifest, directory)
-            try afterSave?(directory)
             call.resolve()
         } catch { call.reject(error.localizedDescription, nil, error) }
     }

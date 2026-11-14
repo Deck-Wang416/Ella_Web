@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { nativeAudioSupported } from "../lib/nativeAudioApi.js";
 import { SegmentedAudio } from "../lib/nativeSegmentedAudioApi.js";
-import { cancelNativeRecordingSync, syncNativeRecordings } from "../lib/nativeRecordingSync.js";
+import { cancelNativeRecordingSync, markNativeRecordingUploaded, syncNativeRecordings } from "../lib/nativeRecordingSync.js";
 
 export function useNativeRecordingSync(caregiverId) {
   useEffect(() => {
@@ -13,7 +13,10 @@ export function useNativeRecordingSync(caregiverId) {
       if (document.visibilityState === "visible") void syncNativeRecordings(caregiverId);
     }
     function onRecordingChange(event) {
-      if (event.status === "saved" || event.status === "interrupted") {
+      if (event.status === "uploaded" && event.latestRecording?.id) {
+        markNativeRecordingUploaded(caregiverId, event.latestRecording.id);
+        retry();
+      } else if (event.status === "saved" || event.status === "interrupted") {
         void syncNativeRecordings(caregiverId);
       } else {
         retry();

@@ -1,6 +1,10 @@
 import Foundation
 import UIKit
 
+extension Notification.Name {
+    static let ellaRecordingUploadCompleted = Notification.Name("ellaRecordingUploadCompleted")
+}
+
 // Owns iOS recording transfers independently of the WebView lifecycle.
 final class IOSRecordingUploader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     static let shared = IOSRecordingUploader()
@@ -248,6 +252,7 @@ final class IOSRecordingUploader: NSObject, URLSessionDataDelegate, @unchecked S
                 block(transfer, "Recording upload response could not be verified.")
                 return
             }
+            if transfer.kind == "complete" { finishCompletedUpload(transfer) }
             schedule(caregiverId: transfer.caregiverId)
         } else if status == 409 && (transfer.kind == "complete" || transfer.kind == "chunk") {
             reconcileCompletion(transfer, detail: json["detail"] as? String)
@@ -293,13 +298,35 @@ final class IOSRecordingUploader: NSObject, URLSessionDataDelegate, @unchecked S
             manifest.confirmedChunkIndexes = acknowledged.sorted()
         case "complete":
             guard json["sessionId"] as? String == manifest.sessionId,
-                  json["status"] as? String == "completed" else { return false }
+                  json["status"] as? String == "completed",
+                  json["uploadedChunks"] as? Int == manifest.segmentCount,
+                  json["lastChunkIndex"] as? Int == manifest.segmentCount - 1 else { return false }
             manifest.uploadCompleted = true
         default: return false
         }
         manifest.uploadError = nil
         do { try RecordingStore.save(manifest, directory); return true }
         catch { return false }
+    }
+
+    private func finishCompletedUpload(_ transfer: Transfer) {
+        recordingFileLock.lock()
+        guard let directory = try? RecordingStore.directory(transfer.caregiverId, transfer.recordingId),
+              var manifest = try? RecordingStore.load(directory),
+              manifest.sessionId != nil, manifest.uploadCompleted == true,
+              manifest.stopped, !manifest.uploaded else {
+            recordingFileLock.unlock()
+            return
+        }
+        manifest.uploaded = true
+        try? RecordingStore.save(manifest, directory)
+        recordingFileLock.unlock()
+        NotificationCenter.default.post(name: .ellaRecordingUploadCompleted, object: manifest)
+        DispatchQueue.global(qos: .utility).async {
+            recordingFileLock.lock(); defer { recordingFileLock.unlock() }
+            // getPendingUploads retries if this removal fails or the app exits first.
+            try? FileManager.default.removeItem(at: directory)
+        }
     }
 
     private func reconcileCompletion(_ transfer: Transfer, detail: String?) {
@@ -326,6 +353,7 @@ final class IOSRecordingUploader: NSObject, URLSessionDataDelegate, @unchecked S
                     }
                     let completion = Transfer("complete", transfer.caregiverId, transfer.recordingId)
                     if self.applySuccess(completion, json) {
+                        self.finishCompletedUpload(completion)
                         self.schedule(caregiverId: transfer.caregiverId)
                     }
                 } else if transfer.kind == "chunk" {
