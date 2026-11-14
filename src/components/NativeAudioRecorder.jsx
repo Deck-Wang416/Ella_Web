@@ -18,6 +18,8 @@ function formatElapsed(totalSeconds) {
   return `${minutes}:${seconds}`;
 }
 
+const UPLOADED_MESSAGE_MS = 4000;
+
 export default function NativeAudioRecorder({ caregiverId, date, enabled = false, onRecorderBusyChange }) {
   const [status, setStatus] = useState("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -31,8 +33,14 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     syncState.unreadableCount > 0 ||
     (awaitingUploadAck && awaitingUploadAck !== syncState.acceptedId);
   const actionPendingRef = useRef(false);
+  const dismissedUploadIdRef = useRef(null);
+  const uploadedRecordingId = status !== "recording" && latestRecording &&
+    (latestRecording.uploaded || latestRecording.id === syncState.acceptedId)
+    ? latestRecording.id : null;
 
   const applyNativeStatus = useCallback((next) => {
+    const incomingRecording = next.recording ?? next.latestRecording;
+    if (next.status !== "recording" && incomingRecording?.id === dismissedUploadIdRef.current) return;
     setStatus((current) => next.status === "idle" && current === "uploaded" ? current : next.status);
     setElapsedSeconds((current) => next.status === "uploaded"
       ? Math.floor(next.latestRecording?.durationSeconds ?? current)
@@ -73,6 +81,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
   useEffect(() => {
     let cancelled = false;
     let stateListener;
+    dismissedUploadIdRef.current = null;
     setStatus("idle");
     setElapsedSeconds(0);
     setLatestRecording(null);
@@ -118,6 +127,27 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
       void stateListener?.remove();
     };
   }, [caregiverId, applyNativeStatus]);
+
+  useEffect(() => {
+    if (!uploadedRecordingId || dismissedUploadIdRef.current === uploadedRecordingId) return undefined;
+    const expiresAt = Date.now() + UPLOADED_MESSAGE_MS;
+    function dismiss() {
+      if (dismissedUploadIdRef.current === uploadedRecordingId) return;
+      dismissedUploadIdRef.current = uploadedRecordingId;
+      setLatestRecording((current) => current?.id === uploadedRecordingId ? null : current);
+      setStatus((current) => current === "recording" ? current : "idle");
+      setElapsedSeconds(0);
+    }
+    function dismissWhenExpired() {
+      if (Date.now() >= expiresAt) dismiss();
+    }
+    const timer = window.setTimeout(dismiss, UPLOADED_MESSAGE_MS);
+    document.addEventListener("visibilitychange", dismissWhenExpired);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", dismissWhenExpired);
+    };
+  }, [uploadedRecordingId]);
 
   useEffect(() => {
     onRecorderBusyChange?.(busy);
@@ -242,9 +272,9 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
         <p className="text-sm text-ink-600">
           {status === "recording"
             ? "Recording"
-            : latestRecording && (latestRecording.uploaded || latestRecording.id === syncState.acceptedId)
+            : uploadedRecordingId
               ? "Recording uploaded to ELLA"
-              : latestRecording || syncState.pendingCount > 0
+              : latestRecording || syncState.pendingUploadCount > 0
               ? "Saving to ELLA"
               : "Ready to record"}
         </p>
