@@ -18,6 +18,7 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A1B2C3D40100000000000003 /* ELLAViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000004 /* ELLAViewController.swift */; };
 		A1B2C3D40100000000000005 /* SegmentedAudioPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000006 /* SegmentedAudioPlugin.swift */; };
+		A1B2C3D40100000000000007 /* IOSRecordingUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40100000000000008 /* IOSRecordingUploader.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		A1B2C3D40100000000000004 /* ELLAViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ELLAViewController.swift; sourceTree = "<group>"; };
 		A1B2C3D40100000000000006 /* SegmentedAudioPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedAudioPlugin.swift; sourceTree = "<group>"; };
+		A1B2C3D40100000000000008 /* IOSRecordingUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSRecordingUploader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +74,7 @@
 				2169220030840507009E99F1 /* App.entitlements */,
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A1B2C3D40100000000000006 /* SegmentedAudioPlugin.swift */,
+				A1B2C3D40100000000000008 /* IOSRecordingUploader.swift */,
 				A1B2C3D40100000000000004 /* ELLAViewController.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -169,6 +172,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A1B2C3D40100000000000005 /* SegmentedAudioPlugin.swift in Sources */,
+				A1B2C3D40100000000000007 /* IOSRecordingUploader.swift in Sources */,
 				A1B2C3D40100000000000003 /* ELLAViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -1,14 +1,17 @@
 import { nativeAudioSupported } from "./nativeAudioApi.js";
+import { Capacitor } from "@capacitor/core";
 import { SegmentedAudio } from "./nativeSegmentedAudioApi.js";
 import * as recordingsApi from "./recordingsApi.js";
+import { getApiBase } from "./apiBase.js";
+import { reconcileIOSRecording } from "./iosRecordingTransfer.js";
 import { transferNativeRecording } from "./nativeRecordingTransfer.js";
-import { uploadSavedRecordingPerfLogs } from "./nativeRecordingPerf.js";
 
 const listeners = new Set();
 const running = new Map();
 const snapshots = new Map();
 const pausedCaregivers = new Set();
 const acceptedIdsByCaregiver = new Map();
+const iosNativeUpload = Capacitor.getPlatform() === "ios";
 
 function publish(caregiverId, state) {
   const next = { ...snapshots.get(caregiverId), ...state };
@@ -43,7 +46,6 @@ export function resumeNativeRecordingSync(caregiverId) {
 
 export async function syncNativeRecordings(caregiverId) {
   if (!nativeAudioSupported || !caregiverId || pausedCaregivers.has(caregiverId)) return;
-  uploadSavedRecordingPerfLogs(caregiverId);
   if (running.has(caregiverId)) {
     const active = running.get(caregiverId);
     if (active.controller.signal.aborted) {
@@ -57,6 +59,10 @@ export async function syncNativeRecordings(caregiverId) {
   const entry = { controller, promise: null, rerunRequested: false };
   const promise = (async () => {
     try {
+      if (iosNativeUpload) {
+        await SegmentedAudio.configureUploader({ caregiverId, apiBase: getApiBase() });
+        await SegmentedAudio.syncUploads({ caregiverId });
+      }
       const current = await SegmentedAudio.getPendingUploads({ caregiverId });
       const recordings = current.recordings || [];
       const acceptedIds = acceptedIdsByCaregiver.get(caregiverId) ?? new Set();
@@ -88,7 +94,7 @@ export async function syncNativeRecordings(caregiverId) {
         if (controller.signal.aborted) return;
         publish(caregiverId, { status: "uploading", completedId: null, mergeFailedId: null });
         try {
-          const finalized = await transferNativeRecording(
+          const finalized = await (iosNativeUpload ? reconcileIOSRecording : transferNativeRecording)(
             recording,
             caregiverId,
             SegmentedAudio,
@@ -110,7 +116,9 @@ export async function syncNativeRecordings(caregiverId) {
         } catch (error) {
           if (controller.signal.aborted) return;
           hadError = true;
-          if (recording.stopped && error?.discardable !== false) failedRecordings.push(recording);
+          if (recording.stopped && !recording.uploadCompleted && error?.discardable !== false) {
+            failedRecordings.push(recording);
+          }
           publish(caregiverId, {
             status: "pending",
             error: error?.message || "Unable to upload saved audio.",

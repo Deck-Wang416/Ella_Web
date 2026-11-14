@@ -2,6 +2,59 @@ import AVFAudio
 import Capacitor
 import Foundation
 
+let recordingFileLock = NSRecursiveLock()
+
+struct RecordingManifest: Codable {
+    let id: String
+    let caregiverId: Int
+    let date: String
+    var sessionId: String? = nil
+    var nextChunkIndex: Int = 0
+    var segmentCount: Int = 0
+    var stopped: Bool = false
+    var durationSeconds: Double = 0
+    var uploaded: Bool = false
+    var confirmedChunkIndexes: [Int]? = nil
+    var uploadCompleted: Bool? = nil
+    var uploadError: String? = nil
+}
+
+enum RecordingStore {
+    static func root(_ caregiverId: Int) throws -> URL {
+        let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                  appropriateFor: nil, create: true)
+        let directory = support.appendingPathComponent("RecordingSegments", isDirectory: true)
+            .appendingPathComponent(String(caregiverId), isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var protectedDirectory = directory
+        try protectedDirectory.setResourceValues(values)
+        return directory
+    }
+
+    static func directory(_ caregiverId: Int, _ id: String) throws -> URL {
+        try root(caregiverId).appendingPathComponent(id.lowercased(), isDirectory: true)
+    }
+
+    static func segment(_ directory: URL, _ index: Int) -> URL {
+        directory.appendingPathComponent(String(format: "chunk_%06d.wav", index))
+    }
+
+    static func load(_ directory: URL) throws -> RecordingManifest {
+        try JSONDecoder().decode(RecordingManifest.self,
+                                 from: Data(contentsOf: directory.appendingPathComponent("manifest.json")))
+    }
+
+    static func save(_ manifest: RecordingManifest, _ directory: URL) throws {
+        let url = directory.appendingPathComponent("manifest.json")
+        try JSONEncoder().encode(manifest).write(to: url, options: .atomic)
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                                              ofItemAtPath: url.path)
+    }
+}
+
 @objc(SegmentedAudioPlugin)
 public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Sendable {
     public let identifier = "SegmentedAudioPlugin"
@@ -11,27 +64,17 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPendingUploads", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setUploadSession", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "readUploadChunk", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "confirmUploadChunk", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "resetUploadSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "configureUploader", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "syncUploads", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "pauseUpload", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "resumeUpload", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "discardRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteUploadedRecording", returnType: CAPPluginReturnPromise)
     ]
 
-    private struct Manifest: Codable {
-        let id: String
-        let caregiverId: Int
-        let date: String
-        var sessionId: String? = nil
-        var nextChunkIndex: Int = 0
-        var segmentCount: Int = 0
-        var stopped: Bool = false
-        var durationSeconds: Double = 0
-        var uploaded: Bool = false
-    }
+    private typealias Manifest = RecordingManifest
 
-    private let lock = NSRecursiveLock()
+    private let lock = recordingFileLock
     private let segmentSeconds = 3.0
     private var engine: AVAudioEngine?
     private var currentFile: AVAudioFile?
@@ -45,6 +88,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
     private var captureFailure: String?
 
     override public func load() {
+        IOSRecordingUploader.shared.start()
         NotificationCenter.default.addObserver(
             self, selector: #selector(audioInterrupted(_:)),
             name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance()
@@ -59,17 +103,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
     }
 
     private func root(_ caregiverId: Int) throws -> URL {
-        let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                                                  appropriateFor: nil, create: true)
-        let directory = support.appendingPathComponent("RecordingSegments", isDirectory: true)
-            .appendingPathComponent(String(caregiverId), isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                                                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        var protectedDirectory = directory
-        try protectedDirectory.setResourceValues(values)
-        return directory
+        try RecordingStore.root(caregiverId)
     }
 
     private func folder(_ call: CAPPluginCall) throws -> URL {
@@ -81,17 +115,15 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
 
     private func manifestURL(_ directory: URL) -> URL { directory.appendingPathComponent("manifest.json") }
     private func segmentURL(_ directory: URL, _ index: Int) -> URL {
-        directory.appendingPathComponent(String(format: "chunk_%06d.wav", index))
+        RecordingStore.segment(directory, index)
     }
 
     private func load(_ directory: URL) throws -> Manifest {
-        try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL(directory)))
+        try RecordingStore.load(directory)
     }
 
     private func save(_ manifest: Manifest, _ directory: URL) throws {
-        try JSONEncoder().encode(manifest).write(to: manifestURL(directory), options: .atomic)
-        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-                                              ofItemAtPath: manifestURL(directory).path)
+        try RecordingStore.save(manifest, directory)
     }
 
     private func target(_ call: CAPPluginCall) throws -> (URL, Manifest) {
@@ -107,7 +139,9 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         ["id": manifest.id, "date": manifest.date, "format": "standalone",
          "sessionId": manifest.sessionId as Any? ?? NSNull(), "nextChunkIndex": manifest.nextChunkIndex,
          "segmentCount": manifest.segmentCount, "stopped": manifest.stopped,
-         "durationSeconds": manifest.durationSeconds, "uploaded": manifest.uploaded]
+         "durationSeconds": manifest.durationSeconds, "uploaded": manifest.uploaded,
+         "uploadCompleted": manifest.uploadCompleted ?? false,
+         "uploadError": manifest.uploadError as Any? ?? NSNull()]
     }
 
     @objc func start(_ call: CAPPluginCall) {
@@ -204,6 +238,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
                 DispatchQueue.main.async { [weak self] in
                     self?.notifyListeners("recordingStateChanged", data: ["status": "recording",
                         "elapsedSeconds": manifest.durationSeconds])
+                    IOSRecordingUploader.shared.kick(caregiverId: manifest.caregiverId)
                 }
             }
         } catch {
@@ -267,6 +302,7 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         notifyListeners("recordingStateChanged", data: ["status": wasInterrupted ? "interrupted" : "saved",
             "recording": summary(manifest), "elapsedSeconds": manifest.durationSeconds,
             "error": wasInterrupted ? captureFailure ?? "Recording was interrupted." : ""])
+        IOSRecordingUploader.shared.kick(caregiverId: manifest.caregiverId)
         return manifest
     }
 
@@ -347,37 +383,37 @@ public class SegmentedAudioPlugin: CAPPlugin, CAPBridgedPlugin, @unchecked Senda
         } catch { call.reject("Unable to read saved recordings.", nil, error) }
     }
 
-    @objc func setUploadSession(_ call: CAPPluginCall) { changeManifest(call) { manifest, _ in
-        guard let id = call.getString("sessionId"), !id.isEmpty,
-              manifest.sessionId == nil || manifest.sessionId == id else { throw self.failure("Session mismatch.") }
-        manifest.sessionId = id
-    } }
-
-    @objc func readUploadChunk(_ call: CAPPluginCall) {
-        lock.lock(); defer { lock.unlock() }
-        do {
-            let (directory, manifest) = try target(call)
-            guard manifest.sessionId != nil, manifest.nextChunkIndex < manifest.segmentCount else {
-                throw failure("No sealed audio segment is ready.")
-            }
-            let data = try Data(contentsOf: segmentURL(directory, manifest.nextChunkIndex))
-            guard !data.isEmpty else { throw failure("Audio segment is empty.") }
-            call.resolve(["base64": data.base64EncodedString(), "byteCount": data.count,
-                          "chunkIndex": manifest.nextChunkIndex, "mimeType": "audio/wav"])
-        } catch { call.reject(error.localizedDescription, nil, error) }
+    @objc func configureUploader(_ call: CAPPluginCall) {
+        guard let caregiverId = caregiver(call), let baseURL = call.getString("apiBase"),
+              IOSRecordingUploader.shared.configure(baseURL: baseURL) else {
+            call.reject("A valid recording API URL is required.")
+            return
+        }
+        IOSRecordingUploader.shared.kick(caregiverId: caregiverId)
+        call.resolve()
     }
 
-    @objc func confirmUploadChunk(_ call: CAPPluginCall) { changeManifest(call) { manifest, _ in
-        guard manifest.sessionId == call.getString("sessionId"),
-              manifest.nextChunkIndex == call.getInt("chunkIndex"),
-              manifest.nextChunkIndex < manifest.segmentCount else { throw self.failure("Upload progress mismatch.") }
-        manifest.nextChunkIndex += 1
-    } }
+    @objc func syncUploads(_ call: CAPPluginCall) {
+        guard let caregiverId = caregiver(call) else { call.reject("A caregiver account is required."); return }
+        IOSRecordingUploader.shared.kick(caregiverId: caregiverId)
+        call.resolve()
+    }
 
-    @objc func resetUploadSession(_ call: CAPPluginCall) { changeManifest(call) { manifest, _ in
-        manifest.sessionId = nil
-        manifest.nextChunkIndex = 0
-    } }
+    @objc func pauseUpload(_ call: CAPPluginCall) {
+        guard let caregiverId = caregiver(call), let id = call.getString("id"), UUID(uuidString: id) != nil else {
+            call.reject("Recording not found."); return
+        }
+        IOSRecordingUploader.shared.pause(caregiverId: caregiverId, recordingId: id.lowercased())
+        call.resolve()
+    }
+
+    @objc func resumeUpload(_ call: CAPPluginCall) {
+        guard let caregiverId = caregiver(call), let id = call.getString("id"), UUID(uuidString: id) != nil else {
+            call.reject("Recording not found."); return
+        }
+        IOSRecordingUploader.shared.resume(caregiverId: caregiverId, recordingId: id.lowercased())
+        call.resolve()
+    }
 
     @objc func discardRecording(_ call: CAPPluginCall) {
         lock.lock(); defer { lock.unlock() }

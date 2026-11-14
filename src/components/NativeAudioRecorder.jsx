@@ -5,7 +5,6 @@ import { formatTodayDate } from "../lib/dailyApi.js";
 import * as recordingsApi from "../lib/recordingsApi.js";
 import { discardSavedRecording } from "../lib/nativeRecordingDiscard.js";
 import { hasUnacceptedNativeRecording } from "../lib/nativeRecordingGate.js";
-import { recordingInterrupted, recordingStarted, recordingStopped, recordingStopRequested } from "../lib/nativeRecordingPerf.js";
 import {
   getNativeRecordingSyncState,
   pauseNativeRecordingSync,
@@ -39,7 +38,6 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     if (next.recording) setLatestRecording(next.recording);
     else if (next.status !== "recording") setLatestRecording(next.latestRecording ?? null);
     if (next.status === "interrupted") {
-      if (next.recording) recordingInterrupted(caregiverId, next.recording);
       if (next.recording) setAwaitingUploadAck(next.recording.id);
       setError(next.recording || next.latestRecording
         ? ""
@@ -146,9 +144,7 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
     setError("");
     try {
       if (status === "recording") {
-        recordingStopRequested(caregiverId);
         const result = await SegmentedAudio.stop({ caregiverId });
-        recordingStopped(caregiverId, result.recording);
         setAwaitingUploadAck(result.recording.id);
         setStatus(result.status);
         setElapsedSeconds(Math.floor(result.recording.durationSeconds));
@@ -163,7 +159,6 @@ export default function NativeAudioRecorder({ caregiverId, date, enabled = false
           return;
         }
         const result = await SegmentedAudio.start({ caregiverId, date });
-        recordingStarted(caregiverId);
         setStatus(result.status);
         setElapsedSeconds(0);
         setLatestRecording(null);
