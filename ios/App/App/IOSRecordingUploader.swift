@@ -249,8 +249,8 @@ final class IOSRecordingUploader: NSObject, URLSessionDataDelegate, @unchecked S
                 return
             }
             schedule(caregiverId: transfer.caregiverId)
-        } else if status == 409 && transfer.kind == "complete" {
-            reconcileCompletion(transfer)
+        } else if status == 409 && (transfer.kind == "complete" || transfer.kind == "chunk") {
+            reconcileCompletion(transfer, detail: json["detail"] as? String)
         } else if status == 0 || status >= 500 || (error as NSError?)?.code == NSURLErrorCancelled {
             // A queued file upload can continue even if the WebView is suspended.
             let attempts = min(8, (retryCounts[transfer.key] ?? 0) + 1)
@@ -302,17 +302,37 @@ final class IOSRecordingUploader: NSObject, URLSessionDataDelegate, @unchecked S
         catch { return false }
     }
 
-    private func reconcileCompletion(_ transfer: Transfer) {
+    private func reconcileCompletion(_ transfer: Transfer, detail: String?) {
         guard let directory = try? RecordingStore.directory(transfer.caregiverId, transfer.recordingId),
               let manifest = try? RecordingStore.load(directory), let sessionId = manifest.sessionId,
               let request = request("/recordings/sessions/\(sessionId)") else { return }
         URLSession.shared.dataTask(with: request) { data, response, _ in
             guard (response as? HTTPURLResponse)?.statusCode == 200,
                   let data,
-                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-                  json["status"] as? String == "completed" else { return }
+                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
             self.onMain {
-                if self.applySuccess(transfer, json) { self.schedule(caregiverId: transfer.caregiverId) }
+                guard json["sessionId"] as? String == sessionId,
+                      json["caregiverId"] as? Int == manifest.caregiverId,
+                      json["date"] as? String == manifest.date,
+                      json["chunkFormat"] as? String == "standalone" else {
+                    self.block(transfer, "Recording session does not match this audio.")
+                    return
+                }
+                if json["status"] as? String == "completed" {
+                    guard manifest.stopped, json["lastChunkIndex"] as? Int == manifest.segmentCount - 1,
+                          json["uploadedChunks"] as? Int == manifest.segmentCount else {
+                        self.block(transfer, "Completed session does not match this audio.")
+                        return
+                    }
+                    let completion = Transfer("complete", transfer.caregiverId, transfer.recordingId)
+                    if self.applySuccess(completion, json) {
+                        self.schedule(caregiverId: transfer.caregiverId)
+                    }
+                } else if transfer.kind == "chunk" {
+                    self.block(transfer, detail ?? "Recording chunk was rejected by the server.")
+                } else if json["status"] as? String != "recording" {
+                    self.block(transfer, "Recording session is no longer active.")
+                }
             }
         }.resume()
     }
