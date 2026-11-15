@@ -6,6 +6,8 @@ function setup({ sessionId = "rec_test", stopped = true } = {}) {
   const calls = [];
   const recording = { id: "local_test", sessionId, stopped };
   const native = {
+    async pauseUpload() { calls.push("pause upload"); },
+    async resumeUpload() { calls.push("resume upload"); },
     async getPendingUploads() { calls.push("scan"); return { recordings: [recording] }; },
     async discardRecording(target) { calls.push("discard"); assert.equal(target.id, recording.id); },
   };
@@ -30,26 +32,26 @@ test("discards only the selected stopped recording after server cancellation", a
     { id: "other", sessionId: "rec_other", stopped: true }, fixture.recording,
   ] });
   await discardSavedRecording(1, fixture.recording.id, fixture.native, fixture.api, fixture.sync);
-  assert.deepEqual(fixture.calls, ["pause", "cancel", "discard", "resume"]);
+  assert.deepEqual(fixture.calls, ["pause", "pause upload", "cancel", "discard", "resume upload", "resume"]);
 });
 
 test("failed server cancellation retains local audio", async () => {
   const fixture = setup();
   fixture.api.cancelRecordingSession = async () => { fixture.calls.push("cancel"); throw new Error("offline"); };
   await assert.rejects(discardSavedRecording(1, fixture.recording.id, fixture.native, fixture.api, fixture.sync), /offline/);
-  assert.deepEqual(fixture.calls, ["pause", "scan", "cancel", "resume"]);
+  assert.deepEqual(fixture.calls, ["pause", "pause upload", "scan", "cancel", "resume upload", "resume"]);
 });
 
 test("active recordings cannot be discarded", async () => {
   const fixture = setup({ stopped: false });
   await assert.rejects(discardSavedRecording(1, fixture.recording.id, fixture.native, fixture.api, fixture.sync), /no longer available/);
-  assert.deepEqual(fixture.calls, ["pause", "scan", "resume"]);
+  assert.deepEqual(fixture.calls, ["pause", "pause upload", "scan", "resume upload", "resume"]);
 });
 
 test("a local-only recording can be discarded without a server session", async () => {
   const fixture = setup({ sessionId: null });
   await discardSavedRecording(1, fixture.recording.id, fixture.native, fixture.api, fixture.sync);
-  assert.deepEqual(fixture.calls, ["pause", "scan", "discard", "resume"]);
+  assert.deepEqual(fixture.calls, ["pause", "pause upload", "scan", "discard", "resume upload", "resume"]);
 });
 
 test("failed local deletion leaves the cancelled recording available to retry", async () => {
@@ -62,6 +64,6 @@ test("failed local deletion leaves the cancelled recording available to retry", 
   await assert.rejects(discardSavedRecording(1, fixture.recording.id, fixture.native, fixture.api, fixture.sync), /file busy/);
   fails = false;
   await discardSavedRecording(1, fixture.recording.id, fixture.native, fixture.api, fixture.sync);
-  assert.deepEqual(fixture.calls, ["pause", "scan", "cancel", "discard", "resume",
-    "pause", "scan", "cancel", "discard", "resume"]);
+  assert.deepEqual(fixture.calls, ["pause", "pause upload", "scan", "cancel", "discard", "resume upload", "resume",
+    "pause", "pause upload", "scan", "cancel", "discard", "resume upload", "resume"]);
 });

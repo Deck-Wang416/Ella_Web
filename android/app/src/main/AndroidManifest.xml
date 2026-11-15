@@ -34,7 +34,7 @@
         <service
             android:name=".SegmentedAudioService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|dataSync" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -54,4 +54,5 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 </manifest>

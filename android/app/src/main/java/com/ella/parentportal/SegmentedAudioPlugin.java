@@ -2,7 +2,6 @@ package com.ella.parentportal;
 
 import android.Manifest;
 import android.content.Intent;
-import android.util.Base64;
 
 import androidx.core.content.ContextCompat;
 
@@ -18,10 +17,9 @@ import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +27,24 @@ import java.util.UUID;
     @Permission(alias = "microphone", strings = {Manifest.permission.RECORD_AUDIO})
 })
 public class SegmentedAudioPlugin extends Plugin {
+    private static WeakReference<SegmentedAudioPlugin> activePlugin = new WeakReference<>(null);
+
+    @Override public void load() {
+        activePlugin = new WeakReference<>(this);
+    }
+
+    static void notifyUploadCompleted(JSONObject manifest) {
+        SegmentedAudioPlugin plugin = activePlugin.get();
+        if (plugin == null || plugin.getActivity() == null) return;
+        plugin.getActivity().runOnUiThread(() -> {
+            JSObject result = new JSObject();
+            result.put("status", "uploaded");
+            JSObject recording = SegmentStore.summary(manifest);
+            result.put("latestRecording", recording);
+            plugin.notifyListeners("recordingStateChanged", result);
+        });
+    }
+
     private int caregiver(PluginCall call) {
         Integer value = call.getInt("caregiverId");
         return value == null ? 0 : value;
@@ -175,7 +191,7 @@ public class SegmentedAudioPlugin extends Plugin {
                 for (File directory : SegmentStore.directories(getContext(), caregiverId)) {
                     try {
                         JSONObject manifest = SegmentStore.read(directory);
-                        if (manifest.optBoolean("uploaded")) {
+                        if (manifest.optBoolean("uploaded") || manifest.optBoolean("uploadCompleted")) {
                             try {
                                 SegmentStore.deleteTree(directory);
                                 SegmentedAudioService.clearInterruption(caregiverId, manifest.optString("id"));
@@ -205,6 +221,8 @@ public class SegmentedAudioPlugin extends Plugin {
                 response.put("recordings", pending);
                 response.put("unreadableCount", unreadable);
                 response.put("cleanupFailureCount", cleanupFailures);
+                JSONObject recent = AndroidRecordingUploader.get(getContext()).recentUpload(caregiverId);
+                if (recent != null) response.put("recentUpload", recent);
                 call.resolve(response);
             } catch (Exception error) { call.reject("Unable to read saved recordings.", null, error); }
         }
@@ -222,79 +240,42 @@ public class SegmentedAudioPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void setUploadSession(PluginCall call) {
-        synchronized (SegmentStore.LOCK) {
-            try {
-                File directory = targetDirectory(call);
-                JSONObject manifest = SegmentStore.read(directory);
-                String sessionId = call.getString("sessionId");
-                if (sessionId == null || sessionId.isEmpty() ||
-                    (!manifest.isNull("sessionId") && !sessionId.equals(manifest.optString("sessionId"))))
-                    throw new IOException("Recording session mismatch");
-                manifest.put("sessionId", sessionId);
-                SegmentStore.write(directory, manifest);
-                call.resolve();
-            } catch (Exception error) { call.reject(error.getMessage(), null, error); }
-        }
+    public void configureUploader(PluginCall call) {
+        try {
+            int caregiverId = caregiver(call);
+            if (caregiverId <= 0 || call.getString("apiBase") == null)
+                throw new IOException("A caregiver and recording API URL are required");
+            AndroidRecordingUploader.get(getContext()).configure(call.getString("apiBase"));
+            SegmentedAudioService.ensureUploadService(getContext());
+            call.resolve();
+        } catch (Exception error) { call.reject(error.getMessage(), null, error); }
     }
 
     @PluginMethod
-    public void readUploadChunk(PluginCall call) {
-        synchronized (SegmentStore.LOCK) {
-            try {
-                File directory = targetDirectory(call);
-                JSONObject manifest = SegmentStore.read(directory);
-                int index = manifest.optInt("nextChunkIndex");
-                if (manifest.isNull("sessionId") || index >= manifest.optInt("segmentCount"))
-                    throw new IOException("No sealed audio segment is ready");
-                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-                try (FileInputStream stream = new FileInputStream(SegmentStore.segment(directory, index))) {
-                    byte[] buffer = new byte[8192];
-                    int count;
-                    while ((count = stream.read(buffer)) != -1) bytes.write(buffer, 0, count);
-                }
-                byte[] data = bytes.toByteArray();
-                if (data.length == 0) throw new IOException("Audio segment is empty");
-                JSObject result = new JSObject();
-                result.put("base64", Base64.encodeToString(data, Base64.NO_WRAP));
-                result.put("byteCount", data.length);
-                result.put("chunkIndex", index);
-                result.put("mimeType", "audio/wav");
-                call.resolve(result);
-            } catch (Exception error) { call.reject(error.getMessage(), null, error); }
-        }
+    public void syncUploads(PluginCall call) {
+        if (caregiver(call) <= 0) { call.reject("A caregiver account is required"); return; }
+        try {
+            SegmentedAudioService.ensureUploadService(getContext());
+            call.resolve();
+        } catch (Exception error) { call.reject(error.getMessage(), null, error); }
     }
 
     @PluginMethod
-    public void confirmUploadChunk(PluginCall call) {
-        synchronized (SegmentStore.LOCK) {
-            try {
-                File directory = targetDirectory(call);
-                JSONObject manifest = SegmentStore.read(directory);
-                Integer index = call.getInt("chunkIndex");
-                if (index == null || index != manifest.optInt("nextChunkIndex") ||
-                    index >= manifest.optInt("segmentCount") ||
-                    !manifest.optString("sessionId").equals(call.getString("sessionId")))
-                    throw new IOException("Upload progress mismatch");
-                manifest.put("nextChunkIndex", index + 1);
-                SegmentStore.write(directory, manifest);
-                call.resolve();
-            } catch (Exception error) { call.reject(error.getMessage(), null, error); }
-        }
+    public void pauseUpload(PluginCall call) {
+        try {
+            File directory = targetDirectory(call);
+            AndroidRecordingUploader.get(getContext()).pause(caregiver(call), directory.getName());
+            call.resolve();
+        } catch (Exception error) { call.reject(error.getMessage(), null, error); }
     }
 
     @PluginMethod
-    public void resetUploadSession(PluginCall call) {
-        synchronized (SegmentStore.LOCK) {
-            try {
-                File directory = targetDirectory(call);
-                JSONObject manifest = SegmentStore.read(directory);
-                manifest.put("sessionId", JSONObject.NULL);
-                manifest.put("nextChunkIndex", 0);
-                SegmentStore.write(directory, manifest);
-                call.resolve();
-            } catch (Exception error) { call.reject(error.getMessage(), null, error); }
+    public void resumeUpload(PluginCall call) {
+        if (caregiver(call) <= 0 || call.getString("id") == null) {
+            call.reject("A caregiver and recording are required"); return;
         }
+        AndroidRecordingUploader.get(getContext()).resume(caregiver(call), call.getString("id").toLowerCase());
+        call.resolve();
     }
 
     @PluginMethod
@@ -317,23 +298,4 @@ public class SegmentedAudioPlugin extends Plugin {
         }
     }
 
-    @PluginMethod
-    public void deleteUploadedRecording(PluginCall call) {
-        synchronized (SegmentStore.LOCK) {
-            try {
-                File directory = targetDirectory(call);
-                JSONObject manifest = SegmentStore.read(directory);
-                // The server's verified final audio is authoritative even if a local ack was
-                // lost after the final segment reached Storage.
-                if (!manifest.optBoolean("stopped") ||
-                    !manifest.optString("sessionId").equals(call.getString("sessionId")))
-                    throw new IOException("Audio is not finalized");
-                manifest.put("uploaded", true);
-                SegmentStore.write(directory, manifest);
-                SegmentStore.deleteTree(directory);
-                SegmentedAudioService.clearInterruption(caregiver(call), manifest.optString("id"));
-                call.resolve();
-            } catch (Exception error) { call.reject(error.getMessage(), null, error); }
-        }
-    }
 }

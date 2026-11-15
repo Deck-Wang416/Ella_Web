@@ -1,10 +1,7 @@
-import { Capacitor } from "@capacitor/core";
-
 export async function discardSavedRecording(caregiverId, recordingId, native, api, sync) {
   await sync.pauseNativeRecordingSync(caregiverId);
-  const iosNativeUpload = Capacitor.getPlatform() === "ios";
   try {
-    if (iosNativeUpload) await native.pauseUpload({ caregiverId, id: recordingId });
+    await native.pauseUpload({ caregiverId, id: recordingId });
     const pending = await native.getPendingUploads({ caregiverId });
     const recording = (pending.recordings || []).find((item) => item.id === recordingId);
     if (!recording || !recording.stopped) {
@@ -22,7 +19,7 @@ export async function discardSavedRecording(caregiverId, recordingId, native, ap
     return recording;
   } finally {
     try {
-      if (iosNativeUpload) await native.resumeUpload({ caregiverId, id: recordingId });
+      await native.resumeUpload({ caregiverId, id: recordingId });
     } finally {
       void sync.resumeNativeRecordingSync(caregiverId);
     }

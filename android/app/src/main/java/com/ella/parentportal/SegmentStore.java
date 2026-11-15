@@ -81,6 +81,8 @@ final class SegmentStore {
         result.put("stopped", manifest.optBoolean("stopped"));
         result.put("durationSeconds", manifest.optDouble("durationSeconds"));
         result.put("uploaded", manifest.optBoolean("uploaded"));
+        result.put("uploadCompleted", manifest.optBoolean("uploadCompleted"));
+        result.put("uploadError", manifest.optString("uploadError", ""));
         return result;
     }
 

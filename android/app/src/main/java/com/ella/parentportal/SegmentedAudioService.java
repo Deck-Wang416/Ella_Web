@@ -14,6 +14,8 @@ import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -30,6 +32,7 @@ import java.util.UUID;
 public class SegmentedAudioService extends Service {
     static final String ACTION_START = "com.ella.parentportal.RECORD_START";
     static final String ACTION_STOP = "com.ella.parentportal.RECORD_STOP";
+    static final String ACTION_SYNC = "com.ella.parentportal.RECORD_SYNC";
     static final String EXTRA_ID = "id";
     static final String EXTRA_DATE = "date";
     static final String EXTRA_CAREGIVER = "caregiverId";
@@ -40,6 +43,7 @@ public class SegmentedAudioService extends Service {
     private static final int SEGMENT_BYTES = BYTES_PER_SECOND * 3;
 
     private static volatile String activeId;
+    private static volatile SegmentedAudioService instance;
     private static volatile String readyId;
     private static volatile String failedStartId;
     private static volatile int activeCaregiver;
@@ -50,6 +54,35 @@ public class SegmentedAudioService extends Service {
     private volatile boolean stopRequested;
     private AudioRecord recorder;
     private Thread captureThread;
+
+    @Override public void onCreate() {
+        super.onCreate();
+        instance = this;
+    }
+
+    @Override public void onDestroy() {
+        if (instance == this) instance = null;
+        super.onDestroy();
+    }
+
+    static void ensureUploadService(android.content.Context context) {
+        AndroidRecordingUploader uploader = AndroidRecordingUploader.get(context);
+        if (!uploader.hasRunnablePending()) return;
+        if (instance != null) { uploader.kickAll(); return; }
+        Intent intent = new Intent(context, SegmentedAudioService.class).setAction(ACTION_SYNC);
+        ContextCompat.startForegroundService(context, intent);
+    }
+
+    static void stopWhenUploadIdle() {
+        SegmentedAudioService service = instance;
+        if (service == null) return;
+        new Handler(Looper.getMainLooper()).post(() -> {
+            if (service != instance || activeId != null ||
+                AndroidRecordingUploader.get(service).hasRunnablePending()) return;
+            service.stopForeground(STOP_FOREGROUND_REMOVE);
+            service.stopSelf();
+        });
+    }
 
     static boolean isCapturing(int caregiverId, String id) {
         return activeCaregiver == caregiverId && id != null && id.equals(activeId);
@@ -87,13 +120,25 @@ public class SegmentedAudioService extends Service {
     @Override public IBinder onBind(Intent intent) { return null; }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null) return START_NOT_STICKY;
+        if (intent == null || ACTION_SYNC.equals(intent.getAction())) {
+            if (activeId != null) {
+                AndroidRecordingUploader.get(this).kickAll();
+                return START_STICKY;
+            }
+            if (!AndroidRecordingUploader.get(this).hasRunnablePending()) {
+                stopSelf(startId);
+                return START_NOT_STICKY;
+            }
+            startUploadForeground();
+            AndroidRecordingUploader.get(this).kickAll();
+            return START_STICKY;
+        }
         if (ACTION_STOP.equals(intent.getAction())) {
             if (isCapturing(intent.getIntExtra(EXTRA_CAREGIVER, 0), intent.getStringExtra(EXTRA_ID))) {
                 stopRequested = true;
                 try { if (recorder != null) recorder.stop(); } catch (IllegalStateException ignored) {}
             }
-            return START_NOT_STICKY;
+            return START_STICKY;
         }
         if (!ACTION_START.equals(intent.getAction()) || activeId != null) return START_NOT_STICKY;
         int caregiverId = intent.getIntExtra(EXTRA_CAREGIVER, 0);
@@ -107,7 +152,8 @@ public class SegmentedAudioService extends Service {
         createNotificationChannel();
         Notification notification = notification();
         if (Build.VERSION.SDK_INT >= 30) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE |
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
@@ -121,7 +167,7 @@ public class SegmentedAudioService extends Service {
         startedAt = SystemClock.elapsedRealtime();
         captureThread = new Thread(() -> capture(caregiverId, date, id), "EllaAudioCapture");
         captureThread.start();
-        return START_NOT_STICKY;
+        return START_STICKY;
     }
 
     private void capture(int caregiverId, String date, String id) {
@@ -171,6 +217,7 @@ public class SegmentedAudioService extends Service {
                 written += count;
                 if (written >= SEGMENT_BYTES) {
                     closeSegment(current, currentFile, written, directory);
+                    AndroidRecordingUploader.get(this).kick(caregiverId);
                     current = null;
                     currentFile = null;
                     written = 0;
@@ -178,6 +225,7 @@ public class SegmentedAudioService extends Service {
             }
             if (current != null) {
                 closeSegment(current, currentFile, written, directory);
+                AndroidRecordingUploader.get(this).kick(caregiverId);
                 current = null;
             }
             synchronized (SegmentStore.LOCK) {
@@ -214,9 +262,31 @@ public class SegmentedAudioService extends Service {
             readyId = null;
             activeCaregiver = 0;
             startedAt = 0;
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
+            if (AndroidRecordingUploader.get(this).hasRunnablePending()) {
+                startUploadForeground();
+                AndroidRecordingUploader.get(this).kickAll();
+            } else {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+                stopSelf();
+            }
         }
+    }
+
+    private void startUploadForeground() {
+        createNotificationChannel();
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_ella)
+            .setContentTitle("ELLA is saving audio")
+            .setOngoing(true)
+            .build();
+        if (Build.VERSION.SDK_INT >= 30) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        } else startForeground(NOTIFICATION_ID, notification);
+    }
+
+    @Override public void onTimeout(int startId, int fgsType) {
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
     }
 
     private static void closeSegment(RandomAccessFile handle, File file, int bytes, File directory) throws Exception {

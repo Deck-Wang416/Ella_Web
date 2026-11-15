@@ -1,17 +1,14 @@
 import { nativeAudioSupported } from "./nativeAudioApi.js";
-import { Capacitor } from "@capacitor/core";
 import { SegmentedAudio } from "./nativeSegmentedAudioApi.js";
 import * as recordingsApi from "./recordingsApi.js";
 import { getApiBase } from "./apiBase.js";
-import { reconcileIOSRecording } from "./iosRecordingTransfer.js";
-import { transferNativeRecording } from "./nativeRecordingTransfer.js";
+import { reconcileNativeRecording } from "./nativeRecordingReconcile.js";
 
 const listeners = new Set();
 const running = new Map();
 const snapshots = new Map();
 const pausedCaregivers = new Set();
 const acceptedIdsByCaregiver = new Map();
-const iosNativeUpload = Capacitor.getPlatform() === "ios";
 
 function publish(caregiverId, state) {
   const next = { ...snapshots.get(caregiverId), ...state };
@@ -68,12 +65,13 @@ export async function syncNativeRecordings(caregiverId) {
   const entry = { controller, promise: null, rerunRequested: false };
   const promise = (async () => {
     try {
-      if (iosNativeUpload) {
-        await SegmentedAudio.configureUploader({ caregiverId, apiBase: getApiBase() });
-        await SegmentedAudio.syncUploads({ caregiverId });
-      }
+      await SegmentedAudio.configureUploader({ caregiverId, apiBase: getApiBase() });
+      await SegmentedAudio.syncUploads({ caregiverId });
       const current = await SegmentedAudio.getPendingUploads({ caregiverId });
       const recordings = current.recordings || [];
+      if (current.recentUpload?.id) {
+        markNativeRecordingUploaded(caregiverId, current.recentUpload.id);
+      }
       const acceptedIds = acceptedIdsByCaregiver.get(caregiverId) ?? new Set();
       acceptedIdsByCaregiver.set(caregiverId, acceptedIds);
       const localIds = new Set(recordings.map((recording) => recording.id));
@@ -103,10 +101,9 @@ export async function syncNativeRecordings(caregiverId) {
         if (controller.signal.aborted) return;
         publish(caregiverId, { status: "uploading", completedId: null });
         try {
-          const finalized = await (iosNativeUpload ? reconcileIOSRecording : transferNativeRecording)(
+          const finalized = await reconcileNativeRecording(
             recording,
             caregiverId,
-            SegmentedAudio,
             recordingsApi,
             controller.signal,
             (recordingId) => {
