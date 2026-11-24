@@ -1,72 +1,57 @@
-# ELLA
+# ELLA Frontend
 
-React + Vite + Tailwind frontend for the ELLA web/PWA and Capacitor mobile app.
+React, Vite, and Tailwind frontend for the ELLA web/PWA and Capacitor iOS/Android apps. The same React UI serves both; recording and push notifications use platform-specific implementations.
 
-## Run
+## Development
+
+Requires Node.js 22 or newer.
 
 ```bash
 npm install
 npm run dev
+npm test
+npm run build
 ```
 
-## Mobile shell
-
-Requires Node 22 (`nvm use`), Xcode for iOS, and Android Studio/SDK for Android.
-
-```bash
-npm install
-npm run mobile:sync
-npx cap open ios
-# or: npx cap open android
-```
-
-`mobile:sync` builds with `https://hri-autism-backend.onrender.com/api` and copies the output into both native projects. To use another backend, set `ELLA_MOBILE_API_BASE` to an HTTPS URL ending in `/api` before running it. The native bundle ID is provisionally `com.ella.parentportal`.
-
-On iOS and Android, parent-mode recording seals independent WAV segments about every 3 seconds in app-private storage. Native uploaders send up to four segments concurrently to one backend session (`chunkFormat: "standalone"`) while recording continues. After Stop and the final upload, `/complete` confirms all segments; the App shows `Recording uploaded to ELLA` and removes local segments without waiting for the backend's asynchronous M4A merge. The backend deletes Storage source chunks after verifying the merged audio. Transient uploads retry natively, including while the App is backgrounded; local segments remain for recovery if the OS stops the process.
-
-A system audio interruption stops and seals the recording; it does not silently resume. `Discard upload` cancels the backend session before removing local audio. If cancellation fails, the local copy remains.
-
-Validate on physical iPhone and Android devices: record during Home/lock/app switching, reconnect after network loss, stop, and verify `mergeStatus: "completed"`, `finalAudio`, and removal of temporary Storage and app-private segments. Force-stop and device-specific background restrictions still require reopening the App to resume.
-
-## Native notifications
-
-After login, the App registers an APNs token on iOS or FCM token on Android and sends it to `/api/subscriptions`. Explicit logout and caregiver switching deactivate the prior binding; Web/PWA Push remains separate.
-
-- iOS: enable the Push Notifications capability for `com.ella.parentportal` in Xcode with a provisioning profile that supports it. Configure backend `APNS_*` values; use sandbox for development builds and production for distributed builds.
-- Android: register `com.ella.parentportal` in the Firebase project used by the backend, then place its `google-services.json` in `android/app/` (gitignored).
-- Backend: deploy the native providers and set `MOBILE_PUSH_DRY_RUN=false`. Without platform credentials, real delivery is not available.
-
-Validate on physical devices using `/api/subscriptions/{caregiverId}` and backend delivery logs. Android Back returns from Diary to Dashboard and otherwise minimizes the App; an open keyboard or profile dialog closes first.
-
-## Env
-
-Create `.env.local`:
+For a local backend, create `.env.local`:
 
 ```env
 VITE_API_BASE=http://127.0.0.1:8000/api
 VITE_WEB_PUSH_VAPID_PUBLIC_KEY=YOUR_PUBLIC_KEY
 ```
 
-## Main API
+Without `VITE_API_BASE`, the web build uses `/api` on its own origin. Web Push also needs the VAPID public key and a service worker. Do not put private keys in frontend environment variables.
 
-- `POST /api/profiles/login`
-- `GET /api/profiles/{caregiverId}`
-- `PUT /api/profiles/{caregiverId}`
-- `GET /api/daily/summaries?timezone=America/New_York&caregiver_id={id}`
-- `GET /api/daily/{date}?timezone=America/New_York&caregiver_id={id}`
-- `PUT /api/daily/{date}?timezone=America/New_York&caregiver_id={id}`
-- `POST /api/recordings/sessions`
-- `GET /api/recordings/sessions/{sessionId}`
-- `POST /api/recordings/sessions/{sessionId}/chunks`
-- `POST /api/recordings/sessions/{sessionId}/complete`
-- `POST /api/recordings/sessions/{sessionId}/cancel`
-- `POST /api/subscriptions`
-- `PUT /api/subscriptions/{id}`
+## Mobile Builds
 
-## Notes
+The Capacitor app ID is `com.ella.parentportal`. Install Xcode for iOS or the Android SDK for Android, then run from this repository root:
 
-- Daily is single-mode: `condition` is either `robot` or `parent`.
-- Dashboard always reads `today`; Diary can still browse selectable dates returned by the backend.
-- Recording UI is only enabled when `condition === "parent"`.
-- Robot dashboard themes are stored in profile `themes` and edited from the robot dashboard only.
-- Web Push uses the backend VAPID public key.
+```bash
+npm run mobile:sync
+npx cap open ios
+# or: npx cap open android
+```
+
+`mobile:sync` builds the web assets and copies them into both native projects. By default, the mobile build uses `https://hri-autism-backend.onrender.com/api`; set `ELLA_MOBILE_API_BASE` to another HTTPS API URL before syncing if needed. A native app does **not** update when Firebase Hosting is redeployed: rebuild and redistribute it after frontend or native code changes. The web build is deployed separately with `npm run build` and `firebase deploy --only hosting`.
+
+## App Flow
+
+- Login returns the caregiver profile. Its condition ranges determine the active robot/parent mode and `dayCount`; dates outside a configured period are blocked. Daily requests are scoped by `caregiver_id`.
+- The Dashboard shows today's data; the Diary uses backend-provided dates and question schemas. Only today's diary is editable. Robot story themes are read and updated through the profile API on the robot dashboard.
+- Web parent-mode recording uses `MediaRecorder` and uploads roughly 3-second chunks. Native recording writes roughly 3-second WAV segments to app-private storage and uploads up to four concurrently through iOS/Android native background transfer. The native uploader can resume unfinished uploads after interruption or relaunch; an audio interruption ends the current recording rather than silently resuming it.
+- Both recording paths use `/api/recordings/sessions`, `/chunks`, and `/complete`. After the backend accepts `/complete`, the App shows `Recording uploaded to ELLA` and starts removing local segments; it does not wait for the backend's asynchronous merge. An unfinished native upload blocks a new recording. `Discard upload` cancels the backend session before deleting its local audio.
+- Web/PWA notifications use Web Push and `public/sw.js`; native apps register APNs (iOS) or FCM (Android) tokens through `/api/subscriptions`. Explicit logout and account switching deactivate the previous device binding.
+
+## Native Setup
+
+- iOS: enable the Push Notifications capability and sign with a team that supports APNs. Development builds use the sandbox APNs environment; distributed builds use production. The backend needs the matching APNs credentials.
+- Android: register `com.ella.parentportal` in the backend's Firebase project and put its `google-services.json` at `android/app/google-services.json` (gitignored). Firebase Admin credentials remain on the backend.
+- Test recording, background transfer, and push delivery on physical devices. Background transfer can still be delayed by OS or network conditions; reopening the app resumes pending work.
+
+## Repository Map
+
+- `src/components/`: Dashboard, Diary, and web/native recording UI.
+- `src/context/`, `src/hooks/`: caregiver/profile state and notification lifecycle.
+- `src/lib/`: API clients, timezone handling, and native recording synchronization.
+- `ios/`, `android/`: Capacitor native projects, including recording uploaders.
+- `public/sw.js`: web service worker; `firebase.json`: Firebase Hosting configuration.
